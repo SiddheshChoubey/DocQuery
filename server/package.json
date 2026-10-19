@@ -1,9 +1,10 @@
 {
-  "name": "server",
+  "name": "docquery-server",
   "version": "1.0.0",
-  "description": "",
+  "description": "DocQuery document ingestion and question-answering API",
   "main": "index.js",
   "type": "module",
+  "engines": { "node": "24.x" },
   "scripts": {
     "dev": "node --env-file=.env --watch index.js",
     "dev:worker": "node --env-file=.env --watch worker.js",

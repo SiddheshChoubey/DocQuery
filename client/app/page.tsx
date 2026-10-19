@@ -83,6 +83,7 @@ export default function Home() {
     <div>
       <div className="min-h-screen w-screen flex">
         <div className="w-[30vw] min-h-screen p-4 flex flex-col justify-center gap-6">
+          <h1 className="text-2xl font-semibold">DocQuery</h1>
           <div className="space-y-3">
             <label htmlFor="document-selection" className="block font-semibold">Ask questions about</label>
             <select id="document-selection" value={selectedId} disabled={loading || busy || !documents.length}
@@ -96,7 +97,7 @@ export default function Home() {
             </select>
             <button type="button" disabled={loading || busy} onClick={() => void refreshDocuments()}
               className="text-sm underline disabled:opacity-50">{loading ? 'Loading…' : 'Refresh document list'}</button>
-            <p className="text-sm text-muted-foreground">Answers use only the selected document. Switching documents starts a fresh chat view.</p>
+            <p className="text-sm text-muted-foreground">Answers use only the selected document. Each document has its own saved conversations.</p>
             {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
           </div>
           <FileUploadComponent disabled={Boolean(deletingId)} onBusyChange={setUploadBusy} onDocumentReady={onDocumentReady} />

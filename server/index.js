@@ -10,9 +10,22 @@ import { legacyDocumentId, listDocuments } from './documents.js';
 import { answerWithSources } from './citations.js';
 import { validateTextInput } from './ingestion.js';
 import { deleteDocument } from './delete-document.js';
+import { ConversationStore, chatError } from './conversations.js';
+import { ChatService } from './chat-service.js';
+import { createChatRouter } from './chat-routes.js';
 
 const client = createChatModel();
 const embeddings = new PdfEmbeddings();
+const conversations = new ConversationStore();
+async function retrievePassages(documentId, query, signal) {
+  const selectedDocument = (await listDocuments()).find((document) => document.id === documentId);
+  if (!selectedDocument) throw chatError(404, 'This document is not indexed. Refresh the document list.');
+  const store = await QdrantVectorStore.fromExistingCollection(embeddings, vectorStoreConfig);
+  const documents = await store.asRetriever({ k: 2, filter: selectedDocument.filter }).invoke(query, { signal });
+  return { documents, selectedDocument };
+}
+const chatService = new ChatService(conversations, retrievePassages,
+  (question, docs, document, options) => answerWithSources(client, question, docs, document, options));
 const asyncRoute = (handler) => (req, res, next) =>
   Promise.resolve(handler(req, res, next)).catch(next);
 const queue = new Queue('file-upload-queue', {
@@ -37,6 +50,7 @@ const upload = multer({ storage: storage });
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: '512kb' }));
+app.use('/conversations', createChatRouter(conversations, chatService, listDocuments));
 
 app.get('/', (req, res) => {
   return res.json({ status: 'All Good!' });
@@ -52,7 +66,13 @@ app.delete('/documents/:documentId', asyncRoute(async (req, res) => {
   const documents = await listDocuments();
   const document = documents.find(({ id }) => id === req.params.documentId);
   if (!document) return res.status(404).json({ message: 'Document not found. Refresh the document list.' });
-  await deleteDocument(document, documents, queue);
+  chatService.beginDocumentDeletion(document.id);
+  try {
+    await deleteDocument(document, documents, queue);
+    conversations.removeDocument(document.id);
+  } finally {
+    chatService.deletingDocuments.delete(document.id);
+  }
   return res.json({ message: 'Document deleted.', documentId: document.id });
 }));
 
@@ -136,7 +156,7 @@ app.get('/chat', asyncRoute(async (req, res) => {
 app.use((err, req, res, next) => {
   if (err.publicMessage) return res.status(err.status).json({ message: err.publicMessage });
   if (err.type === 'entity.too.large') return res.status(413).json({ message: 'Pasted text is too large. Use at most 50,000 characters.' });
-  if (err.type === 'entity.parse.failed') return res.status(400).json({ message: 'Send valid JSON with a title and text.' });
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ message: 'Send valid JSON in the request body.' });
   // Provider errors can contain request details; don't log credentials or PDF text.
   const status = Number(err.status) === 429 ? 429 : 500;
   console.error(`Request failed (status ${status}). Check Gemini access/quota and local services.`);

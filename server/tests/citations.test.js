@@ -57,3 +57,17 @@ test('uncited refusals keep original passages visible without adding fabricated 
   assert.ok(answer.sources.every((source) => !source.cited));
   assert.ok(!answer.message.includes('[1]'));
 });
+
+test('saved conversation context precedes the current question and cancellation reaches the model', async () => {
+  const signal = new AbortController().signal;
+  let received;
+  const model = { invoke: async (messages, options) => {
+    received = messages;
+    assert.equal(options.signal, signal);
+    return { content: 'Current answer [1].' };
+  } };
+  await answerWithSources(model, 'Explain that.', chunks, document, {
+    history: [{ role: 'user', content: 'Read a file?' }, { role: 'assistant', content: 'Use fs.readFile.' }], signal,
+  });
+  assert.deepEqual(received.slice(1), [['human', 'Read a file?'], ['ai', 'Use fs.readFile.'], ['human', 'Explain that.']]);
+});

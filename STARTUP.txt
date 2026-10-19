@@ -1,0 +1,46 @@
+DocQuery - Startup Commands (PowerShell)
+
+First open Docker Desktop and wait for it to finish starting.
+Use three separate terminals and keep all three running while using the app.
+
+TERMINAL 1 - Docker services and Express API
+
+cd "C:\Users\siddh\OneDrive\Desktop\AI RAG PROJECT\DocQuery"
+docker compose up -d
+docker compose ps
+pnpm --dir server dev
+
+Qdrant and Valkey should show as running.
+The API should print: Server started on PORT:8000
+
+TERMINAL 2 - Background indexing worker
+
+cd "C:\Users\siddh\OneDrive\Desktop\AI RAG PROJECT\DocQuery"
+pnpm --dir server dev:worker
+
+Wait for: PDF worker ready
+Keep this terminal running so uploaded documents can be indexed.
+
+TERMINAL 3 - Next.js frontend
+
+cd "C:\Users\siddh\OneDrive\Desktop\AI RAG PROJECT\DocQuery"
+pnpm --dir client dev
+
+When the frontend is ready, open http://localhost:3000 and sign in.
+
+NOTES
+
+- These commands use the already installed dependencies and saved environment files.
+- Use Node.js 24. Saved conversations use its built-in SQLite support; no extra
+  database service or startup command is needed.
+- "pnpm --dir server dev" runs the same script as entering server and running "pnpm dev".
+- Docker may show the internal project name pdf-rag-code. This is intentional:
+  it keeps using the existing containers and stored document data.
+
+STOPPING THE PROJECT
+
+Press Ctrl+C in each of the three app terminals.
+Then run these commands in a terminal to stop Docker services while keeping data:
+
+cd "C:\Users\siddh\OneDrive\Desktop\AI RAG PROJECT\DocQuery"
+docker compose stop

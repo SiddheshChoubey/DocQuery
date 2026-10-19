@@ -1,3 +1,6 @@
+# Preserve the existing containers and data volumes when the folder is renamed.
+name: pdf-rag-code
+
 services:
   valkey:
     image: valkey/valkey

@@ -2,6 +2,7 @@
 # Local database backups may contain document text and queue records.
 .local-backups/
 /server/uploads/
+/server/data/
 **/.DS_Store
 
 logs

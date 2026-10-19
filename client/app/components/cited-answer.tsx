@@ -1,6 +1,9 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkCitations from '../../lib/remark-citations';
 
 export interface Source {
   id: number;
@@ -32,35 +35,28 @@ export default function CitedAnswer({ content, sources, citationNote }: {
     });
   };
 
-  // Preserve text and code without interpreting model output as HTML.
-  // Only references that map to this answer's sources become links.
-  const parts = content.split(/(```[\s\S]*?```|`[^`\n]*`|\[\d+(?:\s*,\s*\d+)*\])/g);
-
   return (
-    <div className="space-y-3">
-      <div className="whitespace-pre-wrap break-words leading-relaxed">
-        {parts.map((part, index) => {
-          if (part.startsWith('```')) {
-            const code = part.slice(3, -3).replace(/^[\w+-]*\r?\n/, '');
-            return <pre key={index} className="my-3 overflow-x-auto rounded-md bg-muted p-3 text-sm whitespace-pre"><code>{code}</code></pre>;
-          }
-          if (part.startsWith('`') && part.endsWith('`')) {
-            return <code key={index} className="rounded bg-muted px-1 text-sm">{part.slice(1, -1)}</code>;
-          }
-          if (/^\[\d+(?:\s*,\s*\d+)*\]$/.test(part)) {
-            return <span key={index}>{part.slice(1, -1).split(',').map((number, referenceIndex) => {
-              const id = Number(number.trim());
+    <div className="min-w-0 space-y-3">
+      <div className="answer-markdown min-w-0 break-words leading-relaxed">
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkCitations]} skipHtml components={{
+          a: ({ href, children }) => {
+            const citation = href?.match(/^#docquery-citation-(\d+)$/);
+            if (citation) {
+              const id = Number(citation[1]);
               const source = sources.find((item) => item.id === id);
-              if (!source) return <span key={referenceIndex} className="text-amber-700 dark:text-amber-400" title="This reference has no retrieved source">[{id}]</span>;
+              if (!source) return <span className="text-amber-700 dark:text-amber-400" title="This reference has no retrieved source">[{id}]</span>;
               const label = `${source.filename}, ${source.sourceType === 'text' ? 'pasted text' : source.page ? `page ${source.page}` : 'page unavailable'}`;
-              return <a key={referenceIndex} href={`#${sourceId(id)}`} title={label}
+              return <a href={`#${sourceId(id)}`} title={label}
                 aria-label={`Show source ${id}: ${label}`}
                 className="mx-0.5 rounded text-blue-700 dark:text-blue-300 font-semibold underline underline-offset-2 focus-visible:outline-2"
                 onClick={(event) => { event.preventDefault(); openSource(id); }}>[{id}]</a>;
-            })}</span>;
-          }
-          return part;
-        })}
+            }
+            return href ? <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-700 dark:text-blue-300">{children}</a> : <span>{children}</span>;
+          },
+          table: ({ children }) => <div className="my-3 max-w-full overflow-x-auto"><table>{children}</table></div>,
+          // Answers should not silently load images from model-generated URLs.
+          img: ({ alt }) => <span>{alt}</span>,
+        }}>{content}</ReactMarkdown>
       </div>
       {citationNote && <p role="status" className="text-sm text-muted-foreground">{citationNote}</p>}
       {!!sources.length && <details ref={details} className="rounded-md border p-3 text-sm">
