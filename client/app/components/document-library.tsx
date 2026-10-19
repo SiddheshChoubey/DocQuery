@@ -20,12 +20,12 @@ export default function DocumentLibrary({ documents, selectedId, busy, deletingI
 }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   return <section aria-labelledby="library-heading" className="space-y-3">
-    <h2 id="library-heading" className="font-semibold">Document library ({documents.length})</h2>
+    <h2 id="library-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Document library ({documents.length})</h2>
     {!documents.length && <p className="text-sm text-muted-foreground">Upload a PDF or paste notes to add your first document.</p>}
     <ul className="max-h-80 overflow-y-auto space-y-3">
-      {documents.map((document) => <li key={document.id} className={`rounded-md border p-3 space-y-2 ${selectedId === document.id ? 'border-blue-500' : ''}`}>
+      {documents.map((document) => <li key={document.id} className={`rounded-xl border p-3 space-y-2 transition-colors ${selectedId === document.id ? 'border-indigo-300 bg-indigo-50/60 dark:border-indigo-700 dark:bg-indigo-950/30' : 'border-border bg-card hover:bg-muted/40'}`}>
         <button type="button" disabled={busy} onClick={() => onSelect(document.id)}
-          aria-pressed={selectedId === document.id} className="block text-left font-medium break-all underline underline-offset-2 disabled:opacity-50">
+          aria-pressed={selectedId === document.id} className="block w-full text-left text-sm font-medium break-words hover:text-indigo-600 focus-visible:outline-2 focus-visible:outline-indigo-500 disabled:opacity-50">
           {document.filename}
           {documents.filter((item) => item.filename === document.filename).length > 1
             ? ` (copy ${documents.filter((item) => item.filename === document.filename).findIndex((item) => item.id === document.id) + 1})` : ''}
@@ -42,7 +42,7 @@ export default function DocumentLibrary({ documents, selectedId, busy, deletingI
             <button type="button" disabled={busy} onClick={() => setConfirmId(null)} className="underline disabled:opacity-50">Cancel</button>
           </div>
         </div> : <button type="button" disabled={busy} onClick={() => setConfirmId(document.id)}
-          aria-label={`Delete ${document.filename}`} className="text-sm text-red-600 dark:text-red-400 underline disabled:opacity-50">Delete</button>}
+          aria-label={`Delete ${document.filename}`} className="text-xs text-muted-foreground hover:text-red-600 focus-visible:outline-2 disabled:opacity-50">Delete</button>}
       </li>)}
     </ul>
   </section>;

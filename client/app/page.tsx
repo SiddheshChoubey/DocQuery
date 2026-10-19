@@ -1,5 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { UserButton } from '@clerk/nextjs';
 import FileUploadComponent from './components/file-upload';
 import ChatComponent from './components/chat';
 import DocumentLibrary, { type IndexedDocument } from './components/document-library';
@@ -81,13 +82,18 @@ export default function Home() {
   };
   return (
     <div>
-      <div className="min-h-screen w-screen flex">
-        <div className="w-[30vw] min-h-screen p-4 flex flex-col justify-center gap-6">
-          <h1 className="text-2xl font-semibold">DocQuery</h1>
+      <div className="min-h-dvh w-full bg-muted/30 lg:grid lg:h-dvh lg:grid-cols-[320px_minmax(0,1fr)] lg:overflow-hidden">
+        <div className="flex flex-col gap-6 border-b bg-background p-5 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-6">
+          <header className="flex items-center gap-3 pb-2">
+            <div aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-sm font-semibold text-white">DQ</div>
+            <div className="min-w-0 flex-1"><h1 className="text-xl font-semibold tracking-tight">DocQuery</h1>
+              <p className="text-xs text-muted-foreground">Your document workspace</p></div>
+            <div className="shrink-0"><UserButton /></div>
+          </header>
           <div className="space-y-3">
-            <label htmlFor="document-selection" className="block font-semibold">Ask questions about</label>
+            <label htmlFor="document-selection" className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground">Selected document</label>
             <select id="document-selection" value={selectedId} disabled={loading || busy || !documents.length}
-              onChange={(event) => setSelectedId(event.target.value)} className="w-full border rounded-md p-2 bg-background">
+              onChange={(event) => setSelectedId(event.target.value)} className="w-full rounded-lg border bg-background p-2.5 text-sm shadow-xs focus-visible:outline-2 focus-visible:outline-indigo-500">
               {!documents.length && <option value="">{loading ? 'Loading documents…' : 'No indexed documents yet'}</option>}
               {documents.map((doc) => <option key={doc.id} value={doc.id}>
                 {doc.filename}{documents.filter((item) => item.filename === doc.filename).length > 1
@@ -96,7 +102,7 @@ export default function Home() {
               </option>)}
             </select>
             <button type="button" disabled={loading || busy} onClick={() => void refreshDocuments()}
-              className="text-sm underline disabled:opacity-50">{loading ? 'Loading…' : 'Refresh document list'}</button>
+              className="text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-50">{loading ? 'Loading…' : 'Refresh document list'}</button>
             <p className="text-sm text-muted-foreground">Answers use only the selected document. Each document has its own saved conversations.</p>
             {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
           </div>
@@ -106,7 +112,7 @@ export default function Home() {
           {libraryMessage && <p role="status" className="text-sm">{libraryMessage}</p>}
           {deleteError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>}
         </div>
-        <div className="w-[70vw] min-h-screen border-l-2">
+        <div className="min-w-0 p-3 sm:p-5 lg:h-full lg:min-h-0 lg:p-6">
           <ChatComponent key={selectedId} uploadBusy={uploadBusy} documentId={selectedId}
             documentName={selectedDocument?.filename} documentsLoading={loading || Boolean(error) || Boolean(deletingId)} />
         </div>

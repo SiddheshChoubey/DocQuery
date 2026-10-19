@@ -14,10 +14,11 @@ function waitForAnswer(run, signal) {
 }
 
 export class ChatService {
-  constructor(store, retrieve, answer) {
+  constructor(store, retrieve, answer, rewrite) {
     this.store = store;
     this.retrieve = retrieve;
     this.answer = answer;
+    this.rewrite = rewrite;
     this.active = new Map();
     this.deletingDocuments = new Set();
   }
@@ -57,7 +58,9 @@ export class ChatService {
     try {
       onEvent?.({ type: 'started', turnId: turn.id });
       const history = conversationContext(this.store.get(conversationId, documentId).turns);
-      const query = contextualQuery(turn.question, history);
+      const query = history.length && this.rewrite
+        ? await waitForAnswer(() => this.rewrite(turn.question, history, { signal: combined }), combined)
+        : contextualQuery(turn.question, history);
       const passageCount = turn.answerMode === 'detailed' ? 5 : 2;
       const { documents, selectedDocument } = await waitForAnswer(() => this.retrieve(documentId, query, combined, passageCount), combined);
       combined.throwIfAborted();

@@ -33,11 +33,11 @@ export class PdfEmbeddings extends GoogleGenerativeAIEmbeddings {
   }
 }
 
-export function createChatModel() {
+export function createChatModel({ maxRetries = 2 } = {}) {
   return new ChatGoogleGenerativeAI({
     apiKey: apiKey(),
     model: process.env.GEMINI_CHAT_MODEL || 'gemini-3.5-flash-lite',
-    maxRetries: 2,
+    maxRetries,
   });
 }
 

@@ -232,9 +232,9 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
     catch { setError('Could not copy the answer. Select the text and copy it manually.'); }
   }
 
-  return <section className="h-screen min-w-0 flex flex-col gap-4 p-4" aria-label="Document chat">
-    <header className="space-y-3">
-      <h2 className="font-semibold break-words">{documentName ? `Chat with ${documentName}` : 'Select an indexed document to start chatting.'}</h2>
+  return <section className="flex h-[85dvh] min-h-[520px] min-w-0 flex-col gap-4 rounded-2xl border bg-background p-4 shadow-sm sm:p-6 lg:h-full lg:min-h-0" aria-label="Document chat">
+    <header className="space-y-3 border-b pb-4">
+      <h2 className="text-lg font-semibold tracking-tight break-words">{documentName ? `Chat with ${documentName}` : 'Select an indexed document to start chatting.'}</h2>
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor="conversation-selection" className="text-sm">Conversation</label>
         <select id="conversation-selection" value={conversation?.id || ''} disabled={disabled}
@@ -252,16 +252,16 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
         <Button variant="outline" size="sm" disabled={busy} onClick={() => setConfirmDelete(false)}>Cancel</Button>
       </div>}
     </header>
-    <div ref={viewport} className="min-h-0 flex-1 overflow-y-auto space-y-4" onScroll={(event) => {
+    <div ref={viewport} className="min-h-0 flex-1 overflow-y-auto space-y-8 px-1 py-4 sm:px-4" onScroll={(event) => {
       const element = event.currentTarget;
       setNearBottom(element.scrollHeight - element.scrollTop - element.clientHeight < 100);
     }}>
       {loading && <p role="status">Loading conversation…</p>}
-      {!loading && !conversation?.turns.length && <p className="text-sm text-muted-foreground">Ask about the selected document. Your conversation is saved on this computer, and recent messages provide context for follow-ups.</p>}
-      {conversation?.turns.map((turn, index) => <div key={turn.id} className="space-y-3">
-        <article className="rounded-lg border p-3"><p className="mb-2 text-sm font-semibold">You</p><p className="whitespace-pre-wrap break-words">{turn.question}</p></article>
-        <article className="min-w-0 rounded-lg border p-3">
-          <p className="mb-2 text-sm font-semibold">Assistant</p>
+      {!loading && !conversation?.turns.length && <p className="mx-auto max-w-md rounded-xl border border-dashed p-8 text-center text-sm leading-7 text-muted-foreground">{documentId ? "Ask a question, find a detail, or explore an idea in your document. Answers include sources you can check." : "Add a PDF or paste your notes to get started. Select a document from your library, then ask your first question."}</p>}
+      {conversation?.turns.map((turn, index) => <div key={turn.id} className="mx-auto w-full max-w-3xl space-y-5">
+        <article className="ml-auto w-fit max-w-[90%] rounded-2xl rounded-tr-sm bg-muted px-4 py-3"><p className="mb-2 text-sm font-semibold">You</p><p className="whitespace-pre-wrap break-words">{turn.question}</p></article>
+        <article className="min-w-0 px-1 py-2 sm:px-2">
+          <p className="mb-1 text-sm font-semibold text-indigo-600 dark:text-indigo-300">Assistant</p>
           <p className="mb-2 text-xs text-muted-foreground">{turn.answerMode === 'detailed' ? 'Detailed answer' : 'Balanced answer'}</p>
           {(turn.answer || turn.status === 'completed') && <>
             <CitedAnswer content={turn.answer} sources={turn.sources} citationNote={turn.citationNote} />
@@ -277,17 +277,17 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
     {!nearBottom && <button type="button" className="text-sm underline" onClick={() => setNearBottom(true)}>Scroll to latest</button>}
     {uploadBusy && <p role="status" className="text-sm">Your document is still processing. Wait until indexing finishes.</p>}
     {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
-    <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+    <form className="flex flex-wrap gap-3 rounded-xl border bg-muted/25 p-3 sm:p-4" onSubmit={(event) => { event.preventDefault(); void send(); }}>
       <div className="w-full space-y-1">
-        <label htmlFor="answer-detail" className="text-sm font-medium">Answer detail</label>
-        <div className="flex max-w-xs items-center gap-3 text-sm">
-          <span>Balanced</span>
-          <input id="answer-detail" type="range" min="0" max="1" step="1"
-            value={answerMode === 'detailed' ? 1 : 0} disabled={disabled}
-            aria-valuetext={answerMode === 'detailed' ? 'Detailed' : 'Balanced'}
-            aria-describedby="answer-detail-help" className="min-w-0 flex-1 accent-primary"
-            onChange={(event) => setAnswerMode(event.target.value === '1' ? 'detailed' : 'balanced')} />
-          <span>Detailed</span>
+        <div className="flex items-center gap-3 text-sm">
+          <span className="font-medium">Answer detail</span>
+          <Button type="button" variant="outline" size="sm" disabled={disabled}
+            aria-label="Detailed answers" aria-pressed={answerMode === 'detailed'}
+            aria-describedby="answer-detail-help"
+            className={answerMode === 'detailed' ? 'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950 dark:text-indigo-300' : ''}
+            onClick={() => setAnswerMode((current) => current === 'balanced' ? 'detailed' : 'balanced')}>
+            {answerMode === 'detailed' ? 'Detailed' : 'Balanced'}
+          </Button>
         </div>
         <p id="answer-detail-help" className="text-xs text-muted-foreground">
           {answerMode === 'detailed' ? 'Fuller explanations supported by your document.' : 'Standard answers to your questions.'}
@@ -295,7 +295,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
         </p>
       </div>
       <Input aria-label="Question" value={message} maxLength={4000} onChange={(event) => setMessage(event.target.value)}
-        placeholder="Ask about this document…" disabled={disabled} className="min-w-0 flex-1" />
+        placeholder="Ask about this document…" disabled={disabled} className="min-w-0 flex-1 bg-background" />
       {sending || pending ? <Button type="button" variant="outline" disabled={stopping} onClick={() => void stop()}>{stopping ? 'Stopping…' : 'Stop'}</Button>
         : <Button type="submit" disabled={disabled || !message.trim()}>Send</Button>}
     </form>

@@ -136,10 +136,10 @@ const FileUploadComponent: React.FC<{
   };
 
   return (
-    <div className="bg-slate-900 text-white shadow-2xl p-4 rounded-lg border-white border-2 w-full space-y-4">
-      <div className="flex gap-4" aria-label="Document input type">
-        <button type="button" disabled={busy} aria-pressed={mode === 'pdf'} onClick={() => setMode('pdf')} className={mode === 'pdf' ? 'underline font-semibold' : ''}>PDF</button>
-        <button type="button" disabled={busy} aria-pressed={mode === 'text'} onClick={() => setMode('text')} className={mode === 'text' ? 'underline font-semibold' : ''}>Paste text</button>
+    <div className="w-full space-y-4 rounded-xl border bg-card p-4 shadow-xs">
+      <div className="flex gap-1 rounded-lg bg-muted p-1 text-sm" aria-label="Document input type">
+        <button type="button" disabled={busy} aria-pressed={mode === 'pdf'} onClick={() => setMode('pdf')} className={`flex-1 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 ${mode === 'pdf' ? 'bg-background font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}>PDF</button>
+        <button type="button" disabled={busy} aria-pressed={mode === 'text'} onClick={() => setMode('text')} className={`flex-1 rounded-md px-3 py-1.5 transition-colors disabled:opacity-50 ${mode === 'text' ? 'bg-background font-medium shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}>Paste text</button>
       </div>
       <input ref={input} type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => {
         const file = event.target.files?.[0];
@@ -147,7 +147,7 @@ const FileUploadComponent: React.FC<{
         if (file && !busy) upload(file);
       }} />
       {mode === 'pdf' && <button type="button" disabled={busy} onClick={() => input.current?.click()}
-        className="flex items-center justify-center gap-2 w-full disabled:opacity-50 disabled:cursor-not-allowed">
+        className="flex min-h-24 w-full items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 px-3 py-5 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-100/60 disabled:cursor-not-allowed disabled:opacity-50 dark:border-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-300">
         <Upload size={20} /> {busy ? 'Processing…' : 'Upload PDF File'}
       </button>}
       {mode === 'text' && <form className="space-y-3" onSubmit={(event) => {
@@ -156,21 +156,21 @@ const FileUploadComponent: React.FC<{
       }}>
         <label className="block text-sm">Title
           <input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={120} required disabled={busy}
-            placeholder="My study notes" className="mt-1 w-full rounded border border-slate-500 bg-slate-800 p-2" />
+            placeholder="My study notes" className="mt-1 w-full rounded-lg border bg-background p-2 text-sm focus-visible:outline-2 focus-visible:outline-indigo-500" />
         </label>
         <label className="block text-sm">Text
           <textarea value={text} onChange={(event) => setText(event.target.value)} maxLength={50000} rows={6} required disabled={busy}
-            placeholder="Paste your notes here…" className="mt-1 w-full rounded border border-slate-500 bg-slate-800 p-2" />
+            placeholder="Paste your notes here…" className="mt-1 w-full rounded-lg border bg-background p-2 text-sm focus-visible:outline-2 focus-visible:outline-indigo-500" />
         </label>
-        <p className="text-xs text-slate-300">{text.length.toLocaleString()} / 50,000 characters</p>
-        <button type="submit" disabled={busy || !title.trim() || !text.trim()} className="w-full rounded bg-blue-600 p-2 disabled:opacity-50">
+        <p className="text-xs text-muted-foreground">{text.length.toLocaleString()} / 50,000 characters</p>
+        <button type="submit" disabled={busy || !title.trim() || !text.trim()} className="w-full rounded-lg bg-indigo-600 p-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50">
           {busy ? 'Processing…' : 'Add text'}
         </button>
       </form>}
       {filename && <p className="text-sm break-all">{filename}</p>}
-      <p role="status" aria-live="polite" className="text-sm">{message}</p>
+      <p role="status" aria-live="polite" className="text-xs leading-relaxed text-muted-foreground">{message}</p>
       {processing && <progress aria-label={uploading ? 'Upload progress' : 'Indexing progress'} max={100} value={percent} className="w-full" />}
-      {error && <p role="alert" className="text-sm text-red-300">{error}</p>}
+      {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     </div>
   );
 };

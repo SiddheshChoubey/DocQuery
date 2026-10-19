@@ -13,8 +13,10 @@ import { deleteDocument } from './delete-document.js';
 import { ConversationStore, chatError } from './conversations.js';
 import { ChatService } from './chat-service.js';
 import { createChatRouter } from './chat-routes.js';
+import { rewriteQuery } from './query-rewrite.js';
 
 const client = createChatModel();
+const rewriteModel = createChatModel({ maxRetries: 0 });
 const embeddings = new PdfEmbeddings();
 const conversations = new ConversationStore();
 async function retrievePassages(documentId, query, signal, passageCount = 2) {
@@ -25,7 +27,8 @@ async function retrievePassages(documentId, query, signal, passageCount = 2) {
   return { documents, selectedDocument };
 }
 const chatService = new ChatService(conversations, retrievePassages,
-  (question, docs, document, options) => answerWithSources(client, question, docs, document, options));
+  (question, docs, document, options) => answerWithSources(client, question, docs, document, options),
+  (question, history, options) => rewriteQuery(rewriteModel, question, history, options));
 const asyncRoute = (handler) => (req, res, next) =>
   Promise.resolve(handler(req, res, next)).catch(next);
 const queue = new Queue('file-upload-queue', {

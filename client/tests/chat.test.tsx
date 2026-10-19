@@ -1,4 +1,4 @@
-﻿import { browser } from './dom-setup';
+import { browser } from './dom-setup';
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
@@ -67,10 +67,10 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
   let view = render(<Chat {...props} />);
   try {
     await view.findByText('Saved answer', { exact: false });
-    const slider = view.getByRole('slider', { name: 'Answer detail' });
-    assert.equal(slider.getAttribute('aria-valuetext'), 'Balanced');
-    fireEvent.change(slider, { target: { value: '1' } });
-    assert.equal(slider.getAttribute('aria-valuetext'), 'Detailed');
+    const modeButton = view.getByRole('button', { name: 'Detailed answers' });
+    assert.equal(modeButton.getAttribute('aria-pressed'), 'false');
+    fireEvent.click(modeButton);
+    assert.equal(modeButton.getAttribute('aria-pressed'), 'true');
     fireEvent.click(view.getByRole('link', { name: 'Show source 1: Guide.pdf, page 2' }));
     await waitFor(() => assert.equal(view.container.querySelector('details')?.open, true));
     fireEvent.click(view.getByRole('button', { name: 'Copy answer' }));
@@ -78,7 +78,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     fireEvent.change(view.getByRole('textbox', { name: 'Question' }), { target: { value: 'Explain more' } });
     fireEvent.click(view.getByRole('button', { name: 'Send' }));
     await view.findByText('Temporary failure. Retry.');
-    fireEvent.change(slider, { target: { value: '0' } });
+    fireEvent.click(modeButton);
     fireEvent.click(view.getByRole('button', { name: 'Retry' }));
     await view.findByText('Retried answer.');
     assert.deepEqual(requestedModes, ['detailed', 'detailed']);
@@ -92,7 +92,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     await view.findByText('Partial streamed answer.');
     await view.findByText(/Generating/);
     assert.deepEqual(requestedModes, ['detailed', 'detailed', 'balanced']);
-    assert.equal((view.getByRole('slider') as HTMLInputElement).disabled, true);
+    assert.equal((view.getByRole('button', { name: 'Detailed answers' }) as HTMLButtonElement).disabled, true);
     fireEvent.click(view.getByRole('button', { name: 'Stop' }));
     await view.findByText('Answer stopped.');
     await waitFor(() => assert.equal((view.getByRole('combobox', { name: 'Conversation' }) as HTMLSelectElement).disabled, false));
