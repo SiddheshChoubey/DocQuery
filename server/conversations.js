@@ -41,6 +41,10 @@ export class ConversationStore {
       CREATE INDEX IF NOT EXISTS conversations_document ON conversations(documentId);
       CREATE INDEX IF NOT EXISTS turns_conversation ON turns(conversationId);
     `);
+    // Additive migration: existing questions keep the original balanced behavior.
+    if (!this.db.prepare('PRAGMA table_info(turns)').all().some((column) => column.name === 'answerMode')) {
+      this.db.exec("ALTER TABLE turns ADD COLUMN answerMode TEXT NOT NULL DEFAULT 'balanced' CHECK(answerMode IN ('balanced', 'detailed'))");
+    }
     // One API process owns this store. A restart cannot resume an old provider call.
     this.db.prepare("UPDATE turns SET status = 'stopped', error = ? WHERE status = 'pending'")
       .run('The server restarted before this answer finished. Retry the question.');
@@ -67,7 +71,8 @@ export class ConversationStore {
     return { ...conversation, turns };
   }
 
-  beginTurn(id, documentId, { turnId, question, retry = false }) {
+  beginTurn(id, documentId, { turnId, question, retry = false, answerMode = 'balanced' }) {
+    if (!['balanced', 'detailed'].includes(answerMode)) throw chatError(400, 'Choose Balanced or Detailed answer mode.');
     const conversation = this.get(id, documentId);
     if (conversation.turns.some((turn) => turn.status === 'pending')) throw chatError(409, 'An answer is already being generated in this chat.');
     if (retry) {
@@ -83,8 +88,8 @@ export class ConversationStore {
       if (typeof turnId !== 'string' || !/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(turnId)) throw chatError(400, 'Invalid message ID.');
       if (this.db.prepare('SELECT id FROM turns WHERE id = ?').get(turnId)) throw chatError(409, 'This message was already submitted. Reopen the chat to check its status.');
       if (conversation.turns.length >= 200) throw chatError(400, 'This conversation has 200 questions. Start a new chat.');
-      this.db.prepare("INSERT INTO turns (id, conversationId, question, createdAt, status) VALUES (?, ?, ?, ?, 'pending')")
-        .run(turnId, id, question.trim(), new Date().toISOString());
+      this.db.prepare("INSERT INTO turns (id, conversationId, question, createdAt, status, answerMode) VALUES (?, ?, ?, ?, 'pending', ?)")
+        .run(turnId, id, question.trim(), new Date().toISOString(), answerMode);
     }
     const title = conversation.turns.length ? conversation.title : question.trim().replace(/\s+/g, ' ').slice(0, 80);
     this.db.prepare('UPDATE conversations SET title = ?, updatedAt = ? WHERE id = ?').run(title, new Date().toISOString(), id);

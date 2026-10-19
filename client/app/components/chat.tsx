@@ -8,6 +8,7 @@ import { readChatStream } from '@/lib/chat-stream';
 
 const API = 'http://localhost:8000/conversations';
 interface Turn {
+  answerMode?: 'balanced' | 'detailed';
   id: string;
   question: string;
   answer: string;
@@ -39,6 +40,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
   documentsLoading: boolean;
 }) {
   const [message, setMessage] = React.useState('');
+  const [answerMode, setAnswerMode] = React.useState<'balanced' | 'detailed'>('balanced');
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [conversation, setConversation] = React.useState<Conversation | null>(null);
   const [loading, setLoading] = React.useState(Boolean(documentId));
@@ -132,6 +134,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
     if (disabled || (!retryTurn && !message.trim())) return;
     const question = retryTurn?.question || message.trim();
     const turnId = retryTurn?.id || crypto.randomUUID();
+    const mode = retryTurn ? retryTurn.answerMode || 'balanced' : answerMode;
     const controller = new AbortController();
     request.current = controller;
     setSending(true);
@@ -148,13 +151,13 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
         remember(id);
         setConversation(data.conversation);
       }
-      const optimistic: Turn = { id: turnId, question, answer: '', sources: [], status: 'pending' };
+      const optimistic: Turn = { id: turnId, question, answer: '', sources: [], status: 'pending', answerMode: mode };
       setConversation((current) => current && ({ ...current, turns: retryTurn
         ? current.turns.map((turn) => turn.id === turnId ? optimistic : turn)
         : [...current.turns, optimistic] }));
       const response = await fetch(`${API}/${id}/messages`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
-        body: JSON.stringify({ documentId, turnId, question, retry: Boolean(retryTurn) }), signal: controller.signal,
+        body: JSON.stringify({ documentId, turnId, question, retry: Boolean(retryTurn), answerMode: mode }), signal: controller.signal,
       });
       await readChatStream(response, (event) => {
         if (controller.signal.aborted || request.current !== controller) return;
@@ -259,6 +262,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
         <article className="rounded-lg border p-3"><p className="mb-2 text-sm font-semibold">You</p><p className="whitespace-pre-wrap break-words">{turn.question}</p></article>
         <article className="min-w-0 rounded-lg border p-3">
           <p className="mb-2 text-sm font-semibold">Assistant</p>
+          <p className="mb-2 text-xs text-muted-foreground">{turn.answerMode === 'detailed' ? 'Detailed answer' : 'Balanced answer'}</p>
           {(turn.answer || turn.status === 'completed') && <>
             <CitedAnswer content={turn.answer} sources={turn.sources} citationNote={turn.citationNote} />
             <Button variant="ghost" size="sm" className="mt-2" onClick={() => void copyAnswer(turn)}>{copied === turn.id ? 'Copied!' : 'Copy answer'}</Button>
@@ -274,6 +278,22 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
     {uploadBusy && <p role="status" className="text-sm">Your document is still processing. Wait until indexing finishes.</p>}
     {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
     <form className="flex flex-wrap gap-2" onSubmit={(event) => { event.preventDefault(); void send(); }}>
+      <div className="w-full space-y-1">
+        <label htmlFor="answer-detail" className="text-sm font-medium">Answer detail</label>
+        <div className="flex max-w-xs items-center gap-3 text-sm">
+          <span>Balanced</span>
+          <input id="answer-detail" type="range" min="0" max="1" step="1"
+            value={answerMode === 'detailed' ? 1 : 0} disabled={disabled}
+            aria-valuetext={answerMode === 'detailed' ? 'Detailed' : 'Balanced'}
+            aria-describedby="answer-detail-help" className="min-w-0 flex-1 accent-primary"
+            onChange={(event) => setAnswerMode(event.target.value === '1' ? 'detailed' : 'balanced')} />
+          <span>Detailed</span>
+        </div>
+        <p id="answer-detail-help" className="text-xs text-muted-foreground">
+          {answerMode === 'detailed' ? 'Fuller explanations supported by your document.' : 'Standard answers to your questions.'}
+          {' '}Applies to your next question. Retry keeps the original setting.
+        </p>
+      </div>
       <Input aria-label="Question" value={message} maxLength={4000} onChange={(event) => setMessage(event.target.value)}
         placeholder="Ask about this document…" disabled={disabled} className="min-w-0 flex-1" />
       {sending || pending ? <Button type="button" variant="outline" disabled={stopping} onClick={() => void stop()}>{stopping ? 'Stopping…' : 'Stop'}</Button>

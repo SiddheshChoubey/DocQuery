@@ -58,10 +58,11 @@ export class ChatService {
       onEvent?.({ type: 'started', turnId: turn.id });
       const history = conversationContext(this.store.get(conversationId, documentId).turns);
       const query = contextualQuery(turn.question, history);
-      const { documents, selectedDocument } = await waitForAnswer(() => this.retrieve(documentId, query, combined), combined);
+      const passageCount = turn.answerMode === 'detailed' ? 5 : 2;
+      const { documents, selectedDocument } = await waitForAnswer(() => this.retrieve(documentId, query, combined, passageCount), combined);
       combined.throwIfAborted();
       const result = documents.length
-        ? await waitForAnswer(() => this.answer(turn.question, documents, selectedDocument, { history, signal: combined, onEvent: progress }), combined)
+        ? await waitForAnswer(() => this.answer(turn.question, documents, selectedDocument, { history, signal: combined, onEvent: progress, answerMode: turn.answerMode }), combined)
         : { message: 'No passages were found in the selected document.', sources: [] };
       combined.throwIfAborted();
       this.store.finishTurn(turn.id, { status: 'completed', answer: result.message, sources: result.sources, citationNote: result.citationNote });

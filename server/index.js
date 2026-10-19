@@ -17,11 +17,11 @@ import { createChatRouter } from './chat-routes.js';
 const client = createChatModel();
 const embeddings = new PdfEmbeddings();
 const conversations = new ConversationStore();
-async function retrievePassages(documentId, query, signal) {
+async function retrievePassages(documentId, query, signal, passageCount = 2) {
   const selectedDocument = (await listDocuments()).find((document) => document.id === documentId);
   if (!selectedDocument) throw chatError(404, 'This document is not indexed. Refresh the document list.');
   const store = await QdrantVectorStore.fromExistingCollection(embeddings, vectorStoreConfig);
-  const documents = await store.asRetriever({ k: 2, filter: selectedDocument.filter }).invoke(query, { signal });
+  const documents = await store.asRetriever({ k: passageCount, filter: selectedDocument.filter }).invoke(query, { signal });
   return { documents, selectedDocument };
 }
 const chatService = new ChatService(conversations, retrievePassages,
