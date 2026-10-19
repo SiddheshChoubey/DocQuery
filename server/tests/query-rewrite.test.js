@@ -2,8 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { rewriteQuery } from '../query-rewrite.js';
-import { contextualQuery, ConversationStore } from '../conversations.js';
-import { ChatService } from '../chat-service.js';
+import { ConversationStore } from './owned-fixtures.js';
+import { contextualQuery } from '../conversations.js';
+import { ChatService } from './owned-fixtures.js';
 
 const history = [{ role: 'user', content: 'Explain PDF indexing' }, { role: 'assistant', content: 'Chunks are indexed.' }];
 

@@ -2,6 +2,7 @@ import { Worker } from 'bullmq';
 import { QdrantVectorStore } from '@langchain/qdrant';
 import { PdfEmbeddings, vectorStoreConfig } from './ai.js';
 import { uploadFailureMessage } from './upload-status.js';
+import { requireOwner } from './conversations.js';
 import { prepareDocuments } from './ingestion.js';
 
 const worker = new Worker(
@@ -10,6 +11,7 @@ const worker = new Worker(
     console.log(`Processing upload job ${job.id}`);
     await job.updateProgress({ phase: 'reading', completed: 0, total: 0 });
     const data = JSON.parse(job.data);
+    requireOwner(data.ownerId);
     const docs = await prepareDocuments(data);
     await job.updateProgress({ phase: 'embedding', completed: 0, total: docs.length });
     const embeddings = new PdfEmbeddings(async (completed, total) => {

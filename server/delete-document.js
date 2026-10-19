@@ -37,6 +37,7 @@ export async function deleteDocument(document, documents, queue, config = vector
   const jobs = await queue.getJobs(['waiting', 'active', 'delayed', 'prioritized', 'waiting-children', 'completed', 'failed']);
   const matchingJobs = jobs.filter((job) => {
     const data = JSON.parse(job.data);
+    if (data.ownerId !== document.ownerId) return false;
     return (data.documentId || (data.path ? legacyDocumentId(data.path) : null)) === document.id;
   });
   for (const job of matchingJobs) {

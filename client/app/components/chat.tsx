@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import CitedAnswer, { type Source } from './cited-answer';
+import type { ApiFetch } from '@/lib/authenticated-fetch';
 import { readChatStream } from '@/lib/chat-stream';
 
 const API = 'http://localhost:8000/conversations';
@@ -26,19 +27,22 @@ interface Conversation extends ConversationSummary {
   turns: Turn[];
 }
 
-async function api(url: string, options?: RequestInit) {
-  const response = await fetch(url, { cache: 'no-store', ...options });
+async function requestJson(fetchApi: ApiFetch, url: string, options?: RequestInit) {
+  const response = await fetchApi(url, { cache: 'no-store', ...options });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'The request failed. Try again.');
   return data;
 }
 
-export default function ConversationChat({ uploadBusy, documentId, documentName, documentsLoading }: {
+export default function ConversationChat({ userId, fetchApi, uploadBusy, documentId, documentName, documentsLoading }: {
+  userId: string;
+  fetchApi: ApiFetch;
   uploadBusy: boolean;
   documentId: string;
   documentName?: string;
   documentsLoading: boolean;
 }) {
+  const api = React.useCallback((url: string, options?: RequestInit) => requestJson(fetchApi, url, options), [fetchApi]);
   const [message, setMessage] = React.useState('');
   const [answerMode, setAnswerMode] = React.useState<'balanced' | 'detailed'>('balanced');
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
@@ -54,7 +58,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
   const navigation = React.useRef<AbortController | null>(null);
   const activeId = React.useRef('');
   const viewport = React.useRef<HTMLDivElement>(null);
-  const storageKey = `docquery-conversation-${documentId}`;
+  const storageKey = `docquery-conversation-${userId}-${documentId}`;
   const query = `documentId=${encodeURIComponent(documentId)}`;
   const pending = conversation?.turns.some((turn) => turn.status === 'pending') || false;
   const busy = loading || sending || stopping || pending;
@@ -68,7 +72,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
     const data = await api(`${API}?${query}`, { signal });
     if (!signal?.aborted) setConversations(data.conversations);
     return data.conversations as ConversationSummary[];
-  }, [query]);
+  }, [query, api]);
 
   React.useEffect(() => {
     if (!documentId) return;
@@ -91,7 +95,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
       }
     })();
     return () => { controller.abort(); request.current?.abort(); navigation.current?.abort(); };
-  }, [documentId, query, storageKey, refreshList]);
+  }, [documentId, query, storageKey, refreshList, api]);
 
   // Another tab or a page refresh may leave a request still being resolved.
   React.useEffect(() => {
@@ -103,7 +107,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
         .catch(() => { if (!controller.signal.aborted) setError('Could not refresh the active answer. Check the backend.'); });
     }, 2000);
     return () => { clearInterval(timer); controller.abort(); };
-  }, [pending, sending, conversation, query]);
+  }, [pending, sending, conversation, query, api]);
 
   React.useEffect(() => {
     if (nearBottom && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight;
@@ -155,7 +159,7 @@ export default function ConversationChat({ uploadBusy, documentId, documentName,
       setConversation((current) => current && ({ ...current, turns: retryTurn
         ? current.turns.map((turn) => turn.id === turnId ? optimistic : turn)
         : [...current.turns, optimistic] }));
-      const response = await fetch(`${API}/${id}/messages`, {
+      const response = await fetchApi(`${API}/${id}/messages`, {
         method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/x-ndjson' },
         body: JSON.stringify({ documentId, turnId, question, retry: Boolean(retryTurn), answerMode: mode }), signal: controller.signal,
       });

@@ -4,8 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ConversationStore } from '../conversations.js';
-import { ChatService } from '../chat-service.js';
+import { ConversationStore } from './owned-fixtures.js';
+import { ChatService } from './owned-fixtures.js';
 import { answerWithSources } from '../citations.js';
 
 test('saved mode controls retrieval and generation, including retries with a different requested mode', async () => {

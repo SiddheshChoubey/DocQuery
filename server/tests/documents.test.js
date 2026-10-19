@@ -39,7 +39,7 @@ test('document listing reads every page and counts chunks without reading text o
   ]);
   assert.equal(requests[1].offset, 'next');
   assert.ok(requests.every((request) => request.with_vector === false));
-  assert.deepEqual(requests[0].with_payload, ['metadata.documentId', 'metadata.fileName', 'metadata.source', 'metadata.sourceType', 'metadata.uploadedAt']);
+  assert.deepEqual(requests[0].with_payload, ['metadata.documentId', 'metadata.fileName', 'metadata.source', 'metadata.sourceType', 'metadata.uploadedAt', 'metadata.ownerId']);
 });
 
 test('upload dates use saved metadata or the legacy upload filename; unknown dates stay unknown', () => {

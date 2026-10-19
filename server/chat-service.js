@@ -35,15 +35,16 @@ export class ChatService {
     this.deletingDocuments.add(documentId);
   }
 
-  stop(conversationId, documentId) {
-    this.store.get(conversationId, documentId);
+  stop(conversationId, documentId, ownerId) {
+    this.store.get(conversationId, documentId, ownerId);
     this.active.get(conversationId)?.controller.abort();
   }
 
-  async send(conversationId, documentId, input, signal = new AbortController().signal, onEvent) {
+  async send(conversationId, documentId, input, signal = new AbortController().signal, onEvent, ownerId) {
     this.checkDocument(documentId);
+    this.store.get(conversationId, documentId, ownerId);
     if (this.active.has(conversationId)) throw chatError(409, 'An answer is already being generated in this chat.');
-    const turn = this.store.beginTurn(conversationId, documentId, input);
+    const turn = this.store.beginTurn(conversationId, documentId, input, ownerId);
     const controller = new AbortController();
     const combined = AbortSignal.any([controller.signal, signal]);
     this.active.set(conversationId, { controller, documentId });
@@ -57,12 +58,12 @@ export class ChatService {
     } : undefined;
     try {
       onEvent?.({ type: 'started', turnId: turn.id });
-      const history = conversationContext(this.store.get(conversationId, documentId).turns);
+      const history = conversationContext(this.store.get(conversationId, documentId, ownerId).turns);
       const query = history.length && this.rewrite
         ? await waitForAnswer(() => this.rewrite(turn.question, history, { signal: combined }), combined)
         : contextualQuery(turn.question, history);
       const passageCount = turn.answerMode === 'detailed' ? 5 : 2;
-      const { documents, selectedDocument } = await waitForAnswer(() => this.retrieve(documentId, query, combined, passageCount), combined);
+      const { documents, selectedDocument } = await waitForAnswer(() => this.retrieve(documentId, query, combined, passageCount, ownerId), combined);
       combined.throwIfAborted();
       const result = documents.length
         ? await waitForAnswer(() => this.answer(turn.question, documents, selectedDocument, { history, signal: combined, onEvent: progress, answerMode: turn.answerMode }), combined)
@@ -82,6 +83,6 @@ export class ChatService {
       controller.abort();
       this.active.delete(conversationId);
     }
-    return this.store.get(conversationId, documentId);
+    return this.store.get(conversationId, documentId, ownerId);
   }
 }

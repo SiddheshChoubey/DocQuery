@@ -20,7 +20,7 @@ export async function prepareDocuments(data) {
   if (!docs.length) throw new Error('No extractable text found. Scanned PDFs need OCR.');
   const documentId = data.documentId || legacyDocumentId(data.path);
   for (const doc of docs) {
-    doc.metadata = { ...doc.metadata, documentId, fileName: data.filename, sourceType: isText ? 'text' : 'pdf',
+    doc.metadata = { ...doc.metadata, ...(data.ownerId ? { ownerId: data.ownerId } : {}), documentId, fileName: data.filename, sourceType: isText ? 'text' : 'pdf',
       ...(data.uploadedAt ? { uploadedAt: data.uploadedAt } : {}) };
   }
   return docs;

@@ -3,13 +3,18 @@ import * as React from 'react';
 import { Upload } from 'lucide-react';
 
 const API = 'http://localhost:8000';
-const STORAGE_KEY = 'pdf-rag-upload-job';
+import type { ApiFetch, GetToken } from '@/lib/authenticated-fetch';
 
 const FileUploadComponent: React.FC<{
+  userId: string;
+  fetchApi: ApiFetch;
+  getToken: GetToken;
   disabled?: boolean;
   onBusyChange: (busy: boolean) => void;
   onDocumentReady: (documentId: string) => void;
-}> = ({ disabled = false, onBusyChange, onDocumentReady }) => {
+}> = ({ userId, fetchApi, getToken, disabled = false, onBusyChange, onDocumentReady }) => {
+  const storageKey = `pdf-rag-upload-job-${userId}`;
+  const disposed = React.useRef(false);
   const input = React.useRef<HTMLInputElement>(null);
   const request = React.useRef<XMLHttpRequest | null>(null);
   const [jobId, setJobId] = React.useState<string | null>(null);
@@ -25,16 +30,17 @@ const FileUploadComponent: React.FC<{
   const busy = processing || disabled;
 
   React.useEffect(() => {
+    disposed.current = false;
     try {
-      const saved = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null');
+      const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
       if (saved?.jobId) {
         setJobId(saved.jobId);
         setFilename(saved.filename || 'PDF');
         setMessage('Checking indexing status…');
       }
     } catch { /* Session storage is optional. */ }
-    return () => request.current?.abort();
-  }, []);
+    return () => { disposed.current = true; request.current?.abort(); };
+  }, [storageKey]);
 
   React.useEffect(() => { onBusyChange(processing); }, [processing, onBusyChange]);
 
@@ -45,7 +51,7 @@ const FileUploadComponent: React.FC<{
     const controller = new AbortController();
     const poll = async () => {
       try {
-        const response = await fetch(`${API}/upload/status/${encodeURIComponent(jobId)}`, {
+        const response = await fetchApi(`${API}/upload/status/${encodeURIComponent(jobId)}`, {
           signal: controller.signal, cache: 'no-store',
         });
         const data = await response.json();
@@ -53,7 +59,7 @@ const FileUploadComponent: React.FC<{
         if (!response.ok && response.status !== 404) throw new Error('status unavailable');
         if (data.state === 'completed' || data.state === 'failed' || response.status === 404) {
           setJobId(null);
-          try { sessionStorage.removeItem(STORAGE_KEY); } catch { /* Optional storage. */ }
+          try { sessionStorage.removeItem(storageKey); } catch { /* Optional storage. */ }
           const ready = data.state === 'completed';
           setPercent(ready ? 100 : undefined);
           setMessage(ready ? 'Document ready! You can now ask questions.' : 'Document is not ready.');
@@ -84,7 +90,7 @@ const FileUploadComponent: React.FC<{
     };
     void poll();
     return () => { disposed = true; controller.abort(); clearTimeout(timer); };
-  }, [jobId, onDocumentReady]);
+  }, [jobId, onDocumentReady, fetchApi, storageKey]);
 
   const upload = (file: File) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
@@ -96,15 +102,21 @@ const FileUploadComponent: React.FC<{
     submit('/upload/pdf', form, file.name);
   };
 
-  const submit = (endpoint: string, body: FormData | string, name: string) => {
+  const submit = async (endpoint: string, body: FormData | string, name: string) => {
     setFilename(name);
     setError('');
     setUploading(true);
     setPercent(0);
     setMessage('Submitting document…');
+    let token;
+    try { token = await getToken(); }
+    catch { if (!disposed.current) { setUploading(false); setError('Could not verify your session. Sign in again.'); } return; }
+    if (disposed.current) return;
+    if (!token) { setUploading(false); setError('Sign in again to upload.'); return; }
     const xhr = new XMLHttpRequest();
     request.current = xhr;
     xhr.open('POST', `${API}${endpoint}`);
+    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     if (typeof body === 'string') xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.timeout = 120000;
     xhr.upload.onprogress = (event) => {
@@ -129,7 +141,7 @@ const FileUploadComponent: React.FC<{
         setUploading(false);
         setPercent(undefined);
         setMessage('Uploaded. Waiting for indexing…');
-        try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ jobId: String(data.jobId), filename: name })); } catch { /* Optional storage. */ }
+        try { sessionStorage.setItem(storageKey, JSON.stringify({ jobId: String(data.jobId), filename: name })); } catch { /* Optional storage. */ }
       } catch { fail('Unexpected server response. Restart the backend and try again.'); }
     };
     xhr.send(body);

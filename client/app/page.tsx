@@ -1,13 +1,22 @@
 'use client';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { UserButton } from '@clerk/nextjs';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UserButton, useSession } from '@clerk/nextjs';
 import FileUploadComponent from './components/file-upload';
 import ChatComponent from './components/chat';
 import DocumentLibrary, { type IndexedDocument } from './components/document-library';
 
-const SELECTION_KEY = 'pdf-rag-selected-document';
+import { createAuthenticatedFetch, type GetToken } from '@/lib/authenticated-fetch';
 
 export default function Home() {
+  const { session, isLoaded } = useSession();
+  const getToken = useCallback(() => session ? session.getToken() : Promise.resolve(null), [session]);
+  if (!isLoaded || !session) return null;
+  return <Workspace key={session.id} userId={session.user.id} getToken={getToken} />;
+}
+
+function Workspace({ userId, getToken }: { userId: string; getToken: GetToken }) {
+  const fetchApi = useMemo(() => createAuthenticatedFetch(getToken), [getToken]);
+  const selectionKey = `pdf-rag-selected-document-${userId}`;
   const [uploadBusy, setUploadBusy] = useState(false);
   const [documents, setDocuments] = useState<IndexedDocument[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -26,13 +35,14 @@ export default function Home() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('http://localhost:8000/documents', { cache: 'no-store', signal: controller.signal });
+      const response = await fetchApi('http://localhost:8000/documents', { cache: 'no-store', signal: controller.signal });
       if (!response.ok) throw new Error('Could not load documents. Check that the backend and Qdrant are running.');
       const data = await response.json();
+      if (controller.signal.aborted) return;
       const indexed: IndexedDocument[] = data.documents;
       setDocuments(indexed);
       let saved = '';
-      try { saved = sessionStorage.getItem(SELECTION_KEY) || ''; } catch { /* Optional storage. */ }
+      try { saved = sessionStorage.getItem(selectionKey) || ''; } catch { /* Optional storage. */ }
       setSelectedId((current) => {
         const next = [preferredId, current, saved].find((id) => indexed.some((doc) => doc.id === id)) || indexed[0]?.id || '';
         return next;
@@ -42,7 +52,7 @@ export default function Home() {
     } finally {
       if (!controller.signal.aborted) setLoading(false);
     }
-  }, []);
+  }, [fetchApi, selectionKey]);
 
   useEffect(() => {
     void refreshDocuments();
@@ -51,10 +61,10 @@ export default function Home() {
 
   useEffect(() => {
     try {
-      if (selectedId) sessionStorage.setItem(SELECTION_KEY, selectedId);
-      else if (!loading) sessionStorage.removeItem(SELECTION_KEY);
+      if (selectedId) sessionStorage.setItem(selectionKey, selectedId);
+      else if (!loading) sessionStorage.removeItem(selectionKey);
     } catch { /* Optional storage. */ }
-  }, [selectedId, loading]);
+  }, [selectedId, loading, selectionKey]);
 
   const onDocumentReady = useCallback((documentId: string) => {
     void refreshDocuments(documentId);
@@ -67,7 +77,7 @@ export default function Home() {
     setDeleteError('');
     setLibraryMessage('');
     try {
-      const response = await fetch(`http://localhost:8000/documents/${encodeURIComponent(document.id)}`, { method: 'DELETE' });
+      const response = await fetchApi(`http://localhost:8000/documents/${encodeURIComponent(document.id)}`, { method: 'DELETE' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Unable to delete this document.');
       setDocuments((current) => current.filter((item) => item.id !== document.id));
@@ -106,14 +116,14 @@ export default function Home() {
             <p className="text-sm text-muted-foreground">Answers use only the selected document. Each document has its own saved conversations.</p>
             {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
           </div>
-          <FileUploadComponent disabled={Boolean(deletingId)} onBusyChange={setUploadBusy} onDocumentReady={onDocumentReady} />
+          <FileUploadComponent userId={userId} fetchApi={fetchApi} getToken={getToken} disabled={Boolean(deletingId)} onBusyChange={setUploadBusy} onDocumentReady={onDocumentReady} />
           <DocumentLibrary documents={documents} selectedId={selectedId} busy={busy || loading} deletingId={deletingId}
             onSelect={setSelectedId} onDelete={removeDocument} />
           {libraryMessage && <p role="status" className="text-sm">{libraryMessage}</p>}
           {deleteError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{deleteError}</p>}
         </div>
         <div className="min-w-0 p-3 sm:p-5 lg:h-full lg:min-h-0 lg:p-6">
-          <ChatComponent key={selectedId} uploadBusy={uploadBusy} documentId={selectedId}
+          <ChatComponent userId={userId} fetchApi={fetchApi} key={selectedId} uploadBusy={uploadBusy} documentId={selectedId}
             documentName={selectedDocument?.filename} documentsLoading={loading || Boolean(error) || Boolean(deletingId)} />
         </div>
       </div>

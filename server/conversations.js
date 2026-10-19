@@ -8,6 +8,10 @@ export function chatError(status, message) {
   return Object.assign(new Error(message), { status, publicMessage: message });
 }
 
+export function requireOwner(ownerId) {
+  if (typeof ownerId !== 'string' || !ownerId.startsWith('user_')) throw chatError(401, 'Sign in to continue.');
+}
+
 export function conversationContext(turns) {
   return turns.filter((turn) => turn.status === 'completed').slice(-6).flatMap((turn) => [
     { role: 'user', content: turn.question.slice(0, 2000) },
@@ -45,6 +49,10 @@ export class ConversationStore {
     if (!this.db.prepare('PRAGMA table_info(turns)').all().some((column) => column.name === 'answerMode')) {
       this.db.exec("ALTER TABLE turns ADD COLUMN answerMode TEXT NOT NULL DEFAULT 'balanced' CHECK(answerMode IN ('balanced', 'detailed'))");
     }
+    if (!this.db.prepare('PRAGMA table_info(conversations)').all().some((column) => column.name === 'ownerId')) {
+      this.db.exec('ALTER TABLE conversations ADD COLUMN ownerId TEXT');
+    }
+    this.db.exec('CREATE INDEX IF NOT EXISTS conversations_owner ON conversations(ownerId, documentId)');
     // One API process owns this store. A restart cannot resume an old provider call.
     this.db.prepare("UPDATE turns SET status = 'stopped', error = ? WHERE status = 'pending'")
       .run('The server restarted before this answer finished. Retry the question.');
@@ -52,28 +60,31 @@ export class ConversationStore {
 
   close() { this.db.close(); }
 
-  list(documentId) {
-    return this.db.prepare('SELECT * FROM conversations WHERE documentId = ? ORDER BY updatedAt DESC, rowid DESC').all(documentId);
+  list(documentId, ownerId) {
+    requireOwner(ownerId);
+    return this.db.prepare('SELECT * FROM conversations WHERE documentId = ? AND ownerId = ? ORDER BY updatedAt DESC, rowid DESC').all(documentId, ownerId);
   }
 
-  create(documentId) {
+  create(documentId, ownerId) {
+    requireOwner(ownerId);
     const id = randomUUID();
     const now = new Date().toISOString();
-    this.db.prepare('INSERT INTO conversations VALUES (?, ?, ?, ?, ?)').run(id, documentId, 'New chat', now, now);
-    return this.get(id, documentId);
+    this.db.prepare('INSERT INTO conversations (id, documentId, title, createdAt, updatedAt, ownerId) VALUES (?, ?, ?, ?, ?, ?)').run(id, documentId, 'New chat', now, now, ownerId);
+    return this.get(id, documentId, ownerId);
   }
 
-  get(id, documentId) {
-    const conversation = this.db.prepare('SELECT * FROM conversations WHERE id = ? AND documentId = ?').get(id, documentId);
+  get(id, documentId, ownerId) {
+    requireOwner(ownerId);
+    const conversation = this.db.prepare('SELECT * FROM conversations WHERE id = ? AND documentId = ? AND ownerId = ?').get(id, documentId, ownerId);
     if (!conversation) throw chatError(404, 'Conversation not found for this document.');
     const turns = this.db.prepare('SELECT * FROM turns WHERE conversationId = ? ORDER BY rowid').all(id)
       .map((turn) => ({ ...turn, sources: JSON.parse(turn.sources) }));
     return { ...conversation, turns };
   }
 
-  beginTurn(id, documentId, { turnId, question, retry = false, answerMode = 'balanced' }) {
+  beginTurn(id, documentId, { turnId, question, retry = false, answerMode = 'balanced' }, ownerId) {
     if (!['balanced', 'detailed'].includes(answerMode)) throw chatError(400, 'Choose Balanced or Detailed answer mode.');
-    const conversation = this.get(id, documentId);
+    const conversation = this.get(id, documentId, ownerId);
     if (conversation.turns.some((turn) => turn.status === 'pending')) throw chatError(409, 'An answer is already being generated in this chat.');
     if (retry) {
       const last = conversation.turns.at(-1);
@@ -93,7 +104,7 @@ export class ConversationStore {
     }
     const title = conversation.turns.length ? conversation.title : question.trim().replace(/\s+/g, ' ').slice(0, 80);
     this.db.prepare('UPDATE conversations SET title = ?, updatedAt = ? WHERE id = ?').run(title, new Date().toISOString(), id);
-    return this.get(id, documentId).turns.at(-1);
+    return this.get(id, documentId, ownerId).turns.at(-1);
   }
 
   finishTurn(turnId, { status, answer = '', sources = [], citationNote = null, error = null }) {
@@ -103,13 +114,14 @@ export class ConversationStore {
       .run(new Date().toISOString(), turnId);
   }
 
-  remove(id, documentId) {
-    const conversation = this.get(id, documentId);
+  remove(id, documentId, ownerId) {
+    const conversation = this.get(id, documentId, ownerId);
     if (conversation.turns.some((turn) => turn.status === 'pending')) throw chatError(409, 'Stop the active answer before deleting this chat.');
     this.db.prepare('DELETE FROM conversations WHERE id = ? AND documentId = ?').run(id, documentId);
   }
 
-  removeDocument(documentId) {
-    this.db.prepare('DELETE FROM conversations WHERE documentId = ?').run(documentId);
+  removeDocument(documentId, ownerId) {
+    requireOwner(ownerId);
+    this.db.prepare('DELETE FROM conversations WHERE documentId = ? AND ownerId = ?').run(documentId, ownerId);
   }
 }

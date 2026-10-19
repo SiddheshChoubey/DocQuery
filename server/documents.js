@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { requireOwner } from './conversations.js';
 import { vectorStoreConfig } from './ai.js';
 
 // Older uploads already have a unique source path. Keep them selectable without
@@ -16,6 +17,7 @@ export function documentFromMetadata(metadata = {}) {
   const timestamp = metadata.uploadedAt ? Date.parse(metadata.uploadedAt) : legacyTimestamp ? Number(legacyTimestamp) : NaN;
   return {
     id,
+    ownerId: metadata.ownerId,
     filename,
     sourceType: metadata.sourceType === 'text' ? 'text' : 'pdf',
     uploadedAt: Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null,
@@ -24,13 +26,14 @@ export function documentFromMetadata(metadata = {}) {
     filter: { must: [{
       key: metadata.documentId ? 'metadata.documentId' : 'metadata.source',
       match: { value: metadata.documentId || source },
-    }] },
+    }, ...(metadata.ownerId ? [{ key: 'metadata.ownerId', match: { value: metadata.ownerId } }] : [])] },
   };
 }
 
 // Qdrant remains the source of truth: no extra database or document registry.
 // Only metadata is read, never PDF text or vectors, when building the dropdown.
-export async function listDocuments(config = vectorStoreConfig) {
+export async function listDocuments(config = vectorStoreConfig, ownerId) {
+  if (ownerId !== undefined) requireOwner(ownerId);
   const documents = new Map();
   let offset;
   do {
@@ -40,7 +43,8 @@ export async function listDocuments(config = vectorStoreConfig) {
       signal: AbortSignal.timeout(10000),
       body: JSON.stringify({
         limit: 256, offset, with_vector: false,
-        with_payload: ['metadata.documentId', 'metadata.fileName', 'metadata.source', 'metadata.sourceType', 'metadata.uploadedAt'],
+        with_payload: ['metadata.documentId', 'metadata.fileName', 'metadata.source', 'metadata.sourceType', 'metadata.uploadedAt', 'metadata.ownerId'],
+        ...(ownerId ? { filter: { must: [{ key: 'metadata.ownerId', match: { value: ownerId } }] } } : {}),
       }),
     });
     if (response.status === 404) return []; // No PDF has been indexed yet.
@@ -48,7 +52,7 @@ export async function listDocuments(config = vectorStoreConfig) {
     const { result } = await response.json();
     for (const point of result.points) {
       const document = documentFromMetadata(point.payload?.metadata);
-      if (!document) continue;
+      if (!document || (ownerId && document.ownerId !== ownerId)) continue;
       if (!documents.has(document.id)) documents.set(document.id, document);
       const existing = documents.get(document.id);
       existing.chunkCount++;

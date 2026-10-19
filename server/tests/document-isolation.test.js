@@ -20,12 +20,17 @@ test('Qdrant retrieval and deletion isolate documents even with identical names 
   try {
     const store = await QdrantVectorStore.fromExistingCollection({ embedQuery: async () => [1, 0] }, config);
     await store.addVectors([[1, 0], [1, 0], [1, 0]], [
-      { pageContent: 'Document A only', metadata: { documentId: 'a', fileName: 'same.pdf' } },
-      { pageContent: 'Document B only', metadata: { documentId: 'b', fileName: 'same.pdf' } },
+      { pageContent: 'Document A only', metadata: { documentId: 'a', fileName: 'same.pdf', ownerId: 'user_a' } },
+      { pageContent: 'Document B only', metadata: { documentId: 'b', fileName: 'same.pdf', ownerId: 'user_b' } },
       { pageContent: 'Legacy document only', metadata: { source: 'uploads/123-456-same.pdf' } },
     ]);
     const documents = await listDocuments(config);
     assert.equal(documents.length, 3);
+    assert.deepEqual((await listDocuments(config, 'user_a')).map((doc) => doc.id), ['a']);
+    assert.deepEqual((await listDocuments(config, 'user_b')).map((doc) => doc.id), ['b']);
+    assert.deepEqual(await listDocuments(config, 'user_empty'), []);
+    const wrongOwner = { must: [{ key: 'metadata.documentId', match: { value: 'a' } }, { key: 'metadata.ownerId', match: { value: 'user_b' } }] };
+    assert.deepEqual(await store.asRetriever({ k: 5, filter: wrongOwner }).invoke('question'), []);
     for (const document of documents) {
       const results = await store.asRetriever({ k: 10, filter: document.filter }).invoke('any question');
       assert.equal(results.length, 1);

@@ -63,7 +63,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     if (method === 'DELETE') { chats.delete(id); return response({ message: 'Deleted' }); }
     return response({ conversation: chat });
   });
-  const props = { uploadBusy: false, documentId: 'doc-a', documentName: 'Guide.pdf', documentsLoading: false };
+  const props = { userId: 'user_test', fetchApi: (url: string, options?: RequestInit) => fetch(url, options), uploadBusy: false, documentId: 'doc-a', documentName: 'Guide.pdf', documentsLoading: false };
   let view = render(<Chat {...props} />);
   try {
     await view.findByText('Saved answer', { exact: false });
@@ -84,6 +84,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     assert.deepEqual(requestedModes, ['detailed', 'detailed']);
     assert.equal(view.getAllByText('Explain more').length, 1);
     assert.equal(chats.get(seed.id)?.turns.length, 2);
+    assert.equal(localStorage.getItem('docquery-conversation-user_other-doc-a'), null);
     fireEvent.click(view.getByRole('button', { name: 'New chat' }));
     assert.ok(!view.queryByText('Saved question'));
     fireEvent.change(view.getByRole('textbox', { name: 'Question' }), { target: { value: 'New topic' } });
@@ -106,7 +107,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     await waitFor(() => assert.equal(chats.has(seed.id), false));
     await waitFor(() => assert.ok(!view.queryByText('Retried answer.')));
     view.unmount();
-    view = render(<Chat {...props} documentId="doc-b" />);
+    view = render(<Chat {...props} documentId="doc-b" userId="user_other" />);
     await waitFor(() => assert.ok(!view.queryByText('Loading conversation…')));
     assert.ok(!view.queryByText('New topic'));
   } finally { view.unmount(); cleanup(); }

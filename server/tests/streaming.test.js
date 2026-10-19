@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { answerWithSources } from '../citations.js';
-import { ChatService } from '../chat-service.js';
-import { ConversationStore } from '../conversations.js';
+import { ChatService } from './owned-fixtures.js';
+import { ConversationStore } from './owned-fixtures.js';
 
 test('Gemini chunks arrive before completion with stable sources and final citation checks', async () => {
   const events = [];

@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
-import { ConversationStore } from '../conversations.js';
-import { ChatService } from '../chat-service.js';
+import { ConversationStore } from './owned-fixtures.js';
+import { ChatService } from './owned-fixtures.js';
 import { createChatRouter } from '../chat-routes.js';
 
 test('conversation HTTP routes create, reload, stop, retry and delete without crossing documents', { timeout: 10000 }, async () => {
@@ -19,6 +19,7 @@ test('conversation HTTP routes create, reload, stop, retry and delete without cr
     });
   const app = express();
   app.use(express.json());
+  app.use((req, _res, next) => { req.ownerId = 'user_test'; next(); });
   app.use('/conversations', createChatRouter(store, service, async () => [{ id: 'a' }, { id: 'b' }]));
   app.use((err, _req, res, _next) => res.status(err.status || 500).json({ message: err.publicMessage || 'Request failed' }));
   const server = await new Promise((resolve) => { const instance = app.listen(0, '127.0.0.1', () => resolve(instance)); });

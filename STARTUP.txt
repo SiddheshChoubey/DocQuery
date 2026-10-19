@@ -44,3 +44,14 @@ Then run these commands in a terminal to stop Docker services while keeping data
 
 cd "C:\Users\siddh\OneDrive\Desktop\AI RAG PROJECT\DocQuery"
 docker compose stop
+
+ACCOUNT ISOLATION (added 2026-10-19)
+
+The API now verifies Clerk tokens. server/.env needs CLERK_SECRET_KEY (or the
+public CLERK_JWT_KEY), CLERK_ISSUER, and CLIENT_ORIGINS. This machine has been
+configured from the existing Clerk setup; never paste real keys into documentation.
+Use http://localhost:3000 (the configured allowed frontend origin).
+After this update, restart API and worker in terminals 1 and 2, and refresh the
+frontend. If needed, restart terminal 3 with pnpm --dir client dev.
+Your original account owns the migrated library; another account starts empty.
+Migration is already complete here. See OWNERSHIP.md before migrating other data.

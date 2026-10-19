@@ -4,8 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, rm, rmdir } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
-import { ConversationStore, conversationContext, contextualQuery } from '../conversations.js';
-import { ChatService } from '../chat-service.js';
+import { ConversationStore } from './owned-fixtures.js';
+import { conversationContext, contextualQuery } from '../conversations.js';
+import { ChatService } from './owned-fixtures.js';
 
 function setup(t, retrieve, answer) {
   const store = new ConversationStore(':memory:');
