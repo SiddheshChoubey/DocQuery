@@ -2,23 +2,8 @@
 
 import { useState } from 'react';
 
-export interface IndexedDocument {
-  id: string;
-  filename: string;
-  chunkCount: number;
-  sourceType: 'pdf' | 'text';
-  uploadedAt: string | null;
-}
-
-export default function DocumentLibrary({ documents, selectedId, busy, deletingId, onSelect, onDelete }: {
-  documents: IndexedDocument[];
-  selectedId: string;
-  busy: boolean;
-  deletingId: string | null;
-  onSelect: (id: string) => void;
-  onDelete: (document: IndexedDocument) => Promise<void>;
-}) {
-  const [confirmId, setConfirmId] = useState<string | null>(null);
+export default function DocumentLibrary({ documents, selectedId, busy, deletingId, onSelect, onDelete }) {
+  const [confirmId, setConfirmId] = useState(null);
   return <section aria-labelledby="library-heading" className="space-y-3">
     <h2 id="library-heading" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Document library ({documents.length})</h2>
     {!documents.length && <p className="text-sm text-muted-foreground">Upload a PDF or paste notes to add your first document.</p>}

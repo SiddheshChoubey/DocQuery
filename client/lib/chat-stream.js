@@ -1,5 +1,5 @@
 // Network reads can split a JSON line or even a UTF-8 character anywhere.
-export async function readChatStream(response: Response, onEvent: (event: Record<string, unknown>) => void) {
+export async function readChatStream(response, onEvent) {
   if (!response.ok) {
     const data = await response.json();
     throw new Error(data.message || 'The request failed. Try again.');

@@ -12,7 +12,9 @@ const compat = new FlatCompat({
 });
 
 const eslintConfig = [
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+  { ignores: [".next/**", "node_modules/**"] },
+  ...compat.extends("next/core-web-vitals"),
+  { rules: { "no-unused-vars": ["error", { argsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" }] } },
 ];
 
 export default eslintConfig;

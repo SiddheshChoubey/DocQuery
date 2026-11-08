@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { createAuthenticatedFetch } from '../lib/authenticated-fetch';
 
 test('API fetch gets a fresh session token and preserves stream headers', async (t) => {
-  const requests: RequestInit[] = [];
-  t.mock.method(globalThis, 'fetch', async (_url: string, options: RequestInit) => { requests.push(options); return new Response('{}'); });
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => { requests.push(options); return new Response('{}'); });
   let token = 'session-a';
   const api = createAuthenticatedFetch(async () => token);
   await api('/test', { headers: { Accept: 'application/x-ndjson' } });
@@ -21,7 +21,7 @@ test('account cleanup abort prevents a delayed token from sending an old request
   let called = false;
   t.mock.method(globalThis, 'fetch', async () => { called = true; return new Response('{}'); });
   const controller = new AbortController();
-  let release!: (token: string) => void;
+  let release;
   const api = createAuthenticatedFetch(() => new Promise((resolve) => { release = resolve; }));
   const response = api('/test', { signal: controller.signal });
   controller.abort(); release('old-session');

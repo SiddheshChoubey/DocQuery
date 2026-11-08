@@ -8,7 +8,7 @@ test('stream parser handles split UTF-8 characters and combined event lines', as
     for (const byte of bytes) controller.enqueue(new Uint8Array([byte]));
     controller.close();
   } }), { headers: { 'Content-Type': 'application/x-ndjson' } });
-  const events: Record<string, unknown>[] = [];
+  const events = [];
   await readChatStream(response, (event) => events.push(event));
   assert.equal(events[0].text, 'café');
   assert.equal(events[1].type, 'done');

@@ -3,27 +3,19 @@ import * as React from 'react';
 import { Upload } from 'lucide-react';
 
 const API = 'http://localhost:8000';
-import type { ApiFetch, GetToken } from '@/lib/authenticated-fetch';
 
-const FileUploadComponent: React.FC<{
-  userId: string;
-  fetchApi: ApiFetch;
-  getToken: GetToken;
-  disabled?: boolean;
-  onBusyChange: (busy: boolean) => void;
-  onDocumentReady: (documentId: string) => void;
-}> = ({ userId, fetchApi, getToken, disabled = false, onBusyChange, onDocumentReady }) => {
+const FileUploadComponent = ({ userId, fetchApi, getToken, disabled = false, onBusyChange, onDocumentReady }) => {
   const storageKey = `pdf-rag-upload-job-${userId}`;
   const disposed = React.useRef(false);
-  const input = React.useRef<HTMLInputElement>(null);
-  const request = React.useRef<XMLHttpRequest | null>(null);
-  const [jobId, setJobId] = React.useState<string | null>(null);
+  const input = React.useRef(null);
+  const request = React.useRef(null);
+  const [jobId, setJobId] = React.useState(null);
   const [uploading, setUploading] = React.useState(false);
   const [filename, setFilename] = React.useState('');
   const [message, setMessage] = React.useState('Upload a PDF or paste text to make it searchable.');
-  const [percent, setPercent] = React.useState<number | undefined>();
+  const [percent, setPercent] = React.useState();
   const [error, setError] = React.useState('');
-  const [mode, setMode] = React.useState<'pdf' | 'text'>('pdf');
+  const [mode, setMode] = React.useState('pdf');
   const [title, setTitle] = React.useState('');
   const [text, setText] = React.useState('');
   const processing = uploading || Boolean(jobId);
@@ -47,7 +39,7 @@ const FileUploadComponent: React.FC<{
   React.useEffect(() => {
     if (!jobId) return;
     let disposed = false;
-    let timer: ReturnType<typeof setTimeout>;
+    let timer;
     const controller = new AbortController();
     const poll = async () => {
       try {
@@ -92,7 +84,7 @@ const FileUploadComponent: React.FC<{
     return () => { disposed = true; controller.abort(); clearTimeout(timer); };
   }, [jobId, onDocumentReady, fetchApi, storageKey]);
 
-  const upload = (file: File) => {
+  const upload = (file) => {
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       setError('Please select a PDF file.');
       return;
@@ -102,7 +94,7 @@ const FileUploadComponent: React.FC<{
     submit('/upload/pdf', form, file.name);
   };
 
-  const submit = async (endpoint: string, body: FormData | string, name: string) => {
+  const submit = async (endpoint, body, name) => {
     setFilename(name);
     setError('');
     setUploading(true);
@@ -122,7 +114,7 @@ const FileUploadComponent: React.FC<{
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) setPercent(Math.round(event.loaded / event.total * 100));
     };
-    const fail = (reason: string) => {
+    const fail = (reason) => {
       setUploading(false);
       setPercent(undefined);
       setMessage('Upload failed.');

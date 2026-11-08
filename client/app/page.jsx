@@ -3,9 +3,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UserButton, useSession } from '@clerk/nextjs';
 import FileUploadComponent from './components/file-upload';
 import ChatComponent from './components/chat';
-import DocumentLibrary, { type IndexedDocument } from './components/document-library';
+import DocumentLibrary from './components/document-library';
 
-import { createAuthenticatedFetch, type GetToken } from '@/lib/authenticated-fetch';
+import { createAuthenticatedFetch } from '@/lib/authenticated-fetch';
 
 export default function Home() {
   const { session, isLoaded } = useSession();
@@ -14,21 +14,21 @@ export default function Home() {
   return <Workspace key={session.id} userId={session.user.id} getToken={getToken} />;
 }
 
-function Workspace({ userId, getToken }: { userId: string; getToken: GetToken }) {
+function Workspace({ userId, getToken }) {
   const fetchApi = useMemo(() => createAuthenticatedFetch(getToken), [getToken]);
   const selectionKey = `pdf-rag-selected-document-${userId}`;
   const [uploadBusy, setUploadBusy] = useState(false);
-  const [documents, setDocuments] = useState<IndexedDocument[]>([]);
+  const [documents, setDocuments] = useState([]);
   const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [libraryMessage, setLibraryMessage] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const busy = uploadBusy || Boolean(deletingId);
-  const listRequest = useRef<AbortController | null>(null);
+  const listRequest = useRef(null);
 
-  const refreshDocuments = useCallback(async (preferredId?: string) => {
+  const refreshDocuments = useCallback(async (preferredId) => {
     listRequest.current?.abort();
     const controller = new AbortController();
     listRequest.current = controller;
@@ -39,7 +39,7 @@ function Workspace({ userId, getToken }: { userId: string; getToken: GetToken })
       if (!response.ok) throw new Error('Could not load documents. Check that the backend and Qdrant are running.');
       const data = await response.json();
       if (controller.signal.aborted) return;
-      const indexed: IndexedDocument[] = data.documents;
+      const indexed = data.documents;
       setDocuments(indexed);
       let saved = '';
       try { saved = sessionStorage.getItem(selectionKey) || ''; } catch { /* Optional storage. */ }
@@ -66,12 +66,12 @@ function Workspace({ userId, getToken }: { userId: string; getToken: GetToken })
     } catch { /* Optional storage. */ }
   }, [selectedId, loading, selectionKey]);
 
-  const onDocumentReady = useCallback((documentId: string) => {
+  const onDocumentReady = useCallback((documentId) => {
     void refreshDocuments(documentId);
   }, [refreshDocuments]);
 
   const selectedDocument = documents.find((doc) => doc.id === selectedId);
-  const removeDocument = async (document: IndexedDocument) => {
+  const removeDocument = async (document) => {
     if (busy || loading) return;
     setDeletingId(document.id);
     setDeleteError('');

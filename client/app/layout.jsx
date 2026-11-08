@@ -1,4 +1,3 @@
-import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import {
   ClerkProvider,
@@ -19,16 +18,14 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'DocQuery',
   description: 'Ask questions about PDFs and notes with answers linked to source passages.',
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}) {
   return (
     <ClerkProvider>
       <html lang="en">

@@ -3,50 +3,25 @@
 import * as React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import CitedAnswer, { type Source } from './cited-answer';
-import type { ApiFetch } from '@/lib/authenticated-fetch';
+import CitedAnswer from './cited-answer';
+
 import { readChatStream } from '@/lib/chat-stream';
 
 const API = 'http://localhost:8000/conversations';
-interface Turn {
-  answerMode?: 'balanced' | 'detailed';
-  id: string;
-  question: string;
-  answer: string;
-  sources: Source[];
-  citationNote?: string;
-  status: 'pending' | 'completed' | 'failed' | 'stopped';
-  error?: string;
-}
-interface ConversationSummary {
-  id: string;
-  title: string;
-  updatedAt: string;
-}
-interface Conversation extends ConversationSummary {
-  turns: Turn[];
-}
 
-async function requestJson(fetchApi: ApiFetch, url: string, options?: RequestInit) {
+async function requestJson(fetchApi, url, options) {
   const response = await fetchApi(url, { cache: 'no-store', ...options });
   const data = await response.json();
   if (!response.ok) throw new Error(data.message || 'The request failed. Try again.');
   return data;
 }
 
-export default function ConversationChat({ userId, fetchApi, uploadBusy, documentId, documentName, documentsLoading }: {
-  userId: string;
-  fetchApi: ApiFetch;
-  uploadBusy: boolean;
-  documentId: string;
-  documentName?: string;
-  documentsLoading: boolean;
-}) {
-  const api = React.useCallback((url: string, options?: RequestInit) => requestJson(fetchApi, url, options), [fetchApi]);
+export default function ConversationChat({ userId, fetchApi, uploadBusy, documentId, documentName, documentsLoading }) {
+  const api = React.useCallback((url, options) => requestJson(fetchApi, url, options), [fetchApi]);
   const [message, setMessage] = React.useState('');
-  const [answerMode, setAnswerMode] = React.useState<'balanced' | 'detailed'>('balanced');
-  const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
-  const [conversation, setConversation] = React.useState<Conversation | null>(null);
+  const [answerMode, setAnswerMode] = React.useState('balanced');
+  const [conversations, setConversations] = React.useState([]);
+  const [conversation, setConversation] = React.useState(null);
   const [loading, setLoading] = React.useState(Boolean(documentId));
   const [sending, setSending] = React.useState(false);
   const [stopping, setStopping] = React.useState(false);
@@ -54,24 +29,24 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
   const [copied, setCopied] = React.useState('');
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [nearBottom, setNearBottom] = React.useState(true);
-  const request = React.useRef<AbortController | null>(null);
-  const navigation = React.useRef<AbortController | null>(null);
+  const request = React.useRef(null);
+  const navigation = React.useRef(null);
   const activeId = React.useRef('');
-  const viewport = React.useRef<HTMLDivElement>(null);
+  const viewport = React.useRef(null);
   const storageKey = `docquery-conversation-${userId}-${documentId}`;
   const query = `documentId=${encodeURIComponent(documentId)}`;
   const pending = conversation?.turns.some((turn) => turn.status === 'pending') || false;
   const busy = loading || sending || stopping || pending;
   const disabled = busy || uploadBusy || documentsLoading || !documentId;
 
-  function remember(id: string) {
+  function remember(id) {
     try { localStorage.setItem(storageKey, id); } catch { /* Optional browser preference. */ }
   }
 
-  const refreshList = React.useCallback(async (signal?: AbortSignal) => {
+  const refreshList = React.useCallback(async (signal) => {
     const data = await api(`${API}?${query}`, { signal });
     if (!signal?.aborted) setConversations(data.conversations);
-    return data.conversations as ConversationSummary[];
+    return data.conversations;
   }, [query, api]);
 
   React.useEffect(() => {
@@ -81,7 +56,7 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
     void (async () => {
       try {
         const list = await refreshList(controller.signal);
-        let saved: string | null = null;
+        let saved = null;
         try { saved = localStorage.getItem(storageKey); } catch { /* Optional browser preference. */ }
         const id = saved === '' ? '' : list.find((item) => item.id === saved)?.id || list[0]?.id || '';
         if (id) {
@@ -113,7 +88,7 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
     if (nearBottom && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight;
   }, [conversation, sending, nearBottom]);
 
-  async function openConversation(id: string) {
+  async function openConversation(id) {
     if (busy) return;
     setError('');
     setConfirmDelete(false);
@@ -134,7 +109,7 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
     }
   }
 
-  async function send(retryTurn?: Turn) {
+  async function send(retryTurn) {
     if (disabled || (!retryTurn && !message.trim())) return;
     const question = retryTurn?.question || message.trim();
     const turnId = retryTurn?.id || crypto.randomUUID();
@@ -155,7 +130,7 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
         remember(id);
         setConversation(data.conversation);
       }
-      const optimistic: Turn = { id: turnId, question, answer: '', sources: [], status: 'pending', answerMode: mode };
+      const optimistic = { id: turnId, question, answer: '', sources: [], status: 'pending', answerMode: mode };
       setConversation((current) => current && ({ ...current, turns: retryTurn
         ? current.turns.map((turn) => turn.id === turnId ? optimistic : turn)
         : [...current.turns, optimistic] }));
@@ -165,11 +140,11 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
       });
       await readChatStream(response, (event) => {
         if (controller.signal.aborted || request.current !== controller) return;
-        if (event.type === 'done') setConversation(event.conversation as Conversation);
+        if (event.type === 'done') setConversation(event.conversation);
         else if (event.type === 'sources' || event.type === 'delta') {
           setConversation((current) => current && ({ ...current, turns: current.turns.map((turn) => {
             if (turn.id !== turnId) return turn;
-            return event.type === 'sources' ? { ...turn, sources: event.sources as Source[] }
+            return event.type === 'sources' ? { ...turn, sources: event.sources }
               : { ...turn, answer: turn.answer + String(event.text) };
           }) }));
         }
@@ -185,7 +160,7 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
           if (!id) { setMessage(question); return; }
           const data = await api(`${API}/${id}?${query}`, { signal: controller.signal });
           setConversation(data.conversation);
-          if (!data.conversation.turns.some((turn: Turn) => turn.id === turnId)) setMessage(question);
+          if (!data.conversation.turns.some((turn) => turn.id === turnId)) setMessage(question);
         } catch {
           setConversation((current) => current && ({ ...current, turns: current.turns.filter((turn) => turn.id !== turnId) }));
           setMessage(question);
@@ -231,7 +206,7 @@ export default function ConversationChat({ userId, fetchApi, uploadBusy, documen
     } finally { setLoading(false); }
   }
 
-  async function copyAnswer(turn: Turn) {
+  async function copyAnswer(turn) {
     try { await navigator.clipboard.writeText(turn.answer); setCopied(turn.id); }
     catch { setError('Could not copy the answer. Select the text and copy it manually.'); }
   }

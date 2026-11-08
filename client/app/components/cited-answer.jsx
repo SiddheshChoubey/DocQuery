@@ -5,27 +5,14 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkCitations from '../../lib/remark-citations';
 
-export interface Source {
-  id: number;
-  filename: string;
-  sourceType?: 'pdf' | 'text';
-  page: number | null;
-  passage: string;
-  cited: boolean;
-}
-
-export default function CitedAnswer({ content, sources, citationNote }: {
-  content: string;
-  sources: Source[];
-  citationNote?: string;
-}) {
+export default function CitedAnswer({ content, sources, citationNote }) {
   const answerId = useId();
-  const details = useRef<HTMLDetailsElement>(null);
-  const cards = useRef(new Map<number, HTMLElement>());
-  const [activeSource, setActiveSource] = useState<number | null>(null);
-  const sourceId = (id: number) => `${answerId}-source-${id}`;
+  const details = useRef(null);
+  const cards = useRef(new Map());
+  const [activeSource, setActiveSource] = useState(null);
+  const sourceId = (id) => `${answerId}-source-${id}`;
 
-  const openSource = (id: number) => {
+  const openSource = (id) => {
     if (details.current) details.current.open = true;
     setActiveSource(id);
     requestAnimationFrame(() => {

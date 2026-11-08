@@ -15,13 +15,13 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
       sources: [{ id: 1, filename: 'Guide.pdf', page: 2, passage: 'Original saved source.', cited: true }] }],
   };
   const chats = new Map([[seed.id, seed]]);
-  let release: (() => void) | undefined;
+  let release;
   let messageCalls = 0;
-  const requestedModes: string[] = [];
+  const requestedModes = [];
   let copied = '';
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value: string) => { copied = value; } } });
-  const response = (data: object) => new Response(JSON.stringify(structuredClone(data)), { headers: { 'Content-Type': 'application/json' } });
-  t.mock.method(globalThis, 'fetch', async (input: RequestInfo | URL, options?: RequestInit) => {
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (value) => { copied = value; } } });
+  const response = (data) => new Response(JSON.stringify(structuredClone(data)), { headers: { 'Content-Type': 'application/json' } });
+  t.mock.method(globalThis, 'fetch', async (input, options) => {
     const url = new URL(String(input));
     const id = url.pathname.split('/')[2];
     const body = options?.body ? JSON.parse(String(options.body)) : {};
@@ -34,7 +34,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     const chat = chats.get(id);
     assert.ok(chat, `Known fake conversation ${id}`);
     if (url.pathname.endsWith('/stop')) {
-      Object.assign(chat.turns.at(-1)!, { status: 'stopped', error: 'Answer stopped.' });
+      Object.assign(chat.turns.at(-1), { status: 'stopped', error: 'Answer stopped.' });
       release?.(); return response({ message: 'Stop requested.' });
     }
     if (url.pathname.endsWith('/messages')) {
@@ -46,7 +46,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
       const encoder = new TextEncoder();
       return new Response(new ReadableStream({
         start(controller) {
-          const emit = (event: object) => controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
+          const emit = (event) => controller.enqueue(encoder.encode(JSON.stringify(event) + '\n'));
           emit({ type: 'sources', sources: [] });
           if (body.question === 'New topic') {
             turn.answer = 'Partial streamed answer.';
@@ -63,7 +63,7 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     if (method === 'DELETE') { chats.delete(id); return response({ message: 'Deleted' }); }
     return response({ conversation: chat });
   });
-  const props = { userId: 'user_test', fetchApi: (url: string, options?: RequestInit) => fetch(url, options), uploadBusy: false, documentId: 'doc-a', documentName: 'Guide.pdf', documentsLoading: false };
+  const props = { userId: 'user_test', fetchApi: (url, options) => fetch(url, options), uploadBusy: false, documentId: 'doc-a', documentName: 'Guide.pdf', documentsLoading: false };
   let view = render(<Chat {...props} />);
   try {
     await view.findByText('Saved answer', { exact: false });
@@ -93,10 +93,10 @@ test('saved chats reload, citations/copy work, failed turns retry, and stop/new/
     await view.findByText('Partial streamed answer.');
     await view.findByText(/Generating/);
     assert.deepEqual(requestedModes, ['detailed', 'detailed', 'balanced']);
-    assert.equal((view.getByRole('button', { name: 'Detailed answers' }) as HTMLButtonElement).disabled, true);
+    assert.equal((view.getByRole('button', { name: 'Detailed answers' })).disabled, true);
     fireEvent.click(view.getByRole('button', { name: 'Stop' }));
     await view.findByText('Answer stopped.');
-    await waitFor(() => assert.equal((view.getByRole('combobox', { name: 'Conversation' }) as HTMLSelectElement).disabled, false));
+    await waitFor(() => assert.equal((view.getByRole('combobox', { name: 'Conversation' })).disabled, false));
     fireEvent.change(view.getByRole('combobox', { name: 'Conversation' }), { target: { value: seed.id } });
     await view.findByText('Retried answer.');
     view.unmount();

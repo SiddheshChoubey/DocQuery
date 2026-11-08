@@ -146,8 +146,13 @@ Run the automated tests from the repository root:
 
 ```powershell
 pnpm --dir client test
+pnpm --dir client lint
 pnpm --dir server test
 ```
+
+The frontend uses JavaScript (`.js`) and JSX (`.jsx`). Its existing `tsx` test
+runner loads JSX and reads import aliases from `jsconfig.json`; TypeScript source
+is not required.
 
 Normal tests use synthetic data and mocked model calls. The real Qdrant integration
 test is opt-in and skipped unless `QDRANT_TEST_URL` is set.
@@ -167,24 +172,24 @@ is optional for local development and does not deploy the application.
 
 ```text
 DocQuery/
-├── client/                         Next.js / React / TypeScript frontend
+├── client/                         Next.js / React / JavaScript frontend
 │   ├── app/
-│   │   ├── layout.tsx              Clerk provider and signed-out welcome screen
-│   │   ├── page.tsx                Signed-in workspace and document selection
+│   │   ├── layout.jsx              Clerk provider and signed-out welcome screen
+│   │   ├── page.jsx                Signed-in workspace and document selection
 │   │   ├── globals.css             Application styles
 │   │   └── components/
-│   │       ├── file-upload.tsx     PDF/text upload and indexing progress
-│   │       ├── document-library.tsx  Document list, selection, and deletion UI
-│   │       ├── chat.tsx            Messages, history, answer mode, and chat controls
-│   │       └── cited-answer.tsx    Markdown answers with source citations
+│   │       ├── file-upload.jsx     PDF/text upload and indexing progress
+│   │       ├── document-library.jsx  Document list, selection, and deletion UI
+│   │       ├── chat.jsx            Messages, history, answer mode, and chat controls
+│   │       └── cited-answer.jsx    Markdown answers with source citations
 │   ├── components/ui/              Reusable button and input components
 │   ├── lib/
-│   │   ├── authenticated-fetch.ts  Adds Clerk session tokens to API requests
-│   │   ├── chat-stream.ts         Reads streamed chat events from the API
-│   │   └── remark-citations.ts    Processes citation markers in Markdown
+│   │   ├── authenticated-fetch.js  Adds Clerk session tokens to API requests
+│   │   ├── chat-stream.js         Reads streamed chat events from the API
+│   │   └── remark-citations.js    Processes citation markers in Markdown
 │   ├── public/                     Static assets
 │   ├── tests/                      Frontend component and helper tests
-│   ├── middleware.ts               Clerk middleware
+│   ├── middleware.js               Clerk middleware
 │   ├── package.json                Frontend dependencies and scripts
 │   └── .env.local                  Local Clerk configuration (not committed)
 ├── server/                         Express API and background indexing worker

@@ -1,15 +1,9 @@
 // Markdown nodes contain text or child nodes. Only plain text gets citations;
 // existing links and code must keep their original meaning.
-interface MarkdownNode {
-  type: string;
-  value?: string;
-  url?: string;
-  children?: MarkdownNode[];
-}
 
 export default function remarkCitations() {
-  return (tree: MarkdownNode) => {
-    function walk(node: MarkdownNode) {
+  return (tree) => {
+    function walk(node) {
       if (!node.children || ['link', 'linkReference', 'code', 'inlineCode'].includes(node.type)) return;
 
       node.children = node.children.flatMap((child) => {
@@ -17,7 +11,7 @@ export default function remarkCitations() {
           walk(child);
           return [child];
         }
-        const parts: MarkdownNode[] = [];
+        const parts = [];
         let offset = 0;
         for (const match of child.value.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)) {
           if (match.index > offset) parts.push({ type: 'text', value: child.value.slice(offset, match.index) });

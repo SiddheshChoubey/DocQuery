@@ -2,13 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import CitedAnswer, { type Source } from '../app/components/cited-answer';
+import CitedAnswer from '../app/components/cited-answer';
 
-const sources: Source[] = [
+const sources = [
   { id: 1, filename: 'Guide.pdf', page: 3, passage: 'Original PDF passage.', cited: true },
   { id: 2, filename: 'Study notes', sourceType: 'text', page: null, passage: 'Original notes.', cited: true },
 ];
-const render = (content: string) => renderToStaticMarkup(<CitedAnswer content={content} sources={sources} />);
+const render = (content) => renderToStaticMarkup(<CitedAnswer content={content} sources={sources} />);
 
 test('answers render Markdown blocks and references inside formatted content', () => {
   const html = render(`# Summary

@@ -1,7 +1,4 @@
-export type GetToken = () => Promise<string | null>;
-export type ApiFetch = (url: string, options?: RequestInit) => Promise<Response>;
-
-export function createAuthenticatedFetch(getToken: GetToken): ApiFetch {
+export function createAuthenticatedFetch(getToken) {
   return async (url, options = {}) => {
     options.signal?.throwIfAborted();
     const token = await getToken();
