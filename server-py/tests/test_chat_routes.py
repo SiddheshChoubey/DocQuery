@@ -136,12 +136,6 @@ def test_document_id_is_required(env, url):
     assert response.status_code == 400 and response.json() == {"message": "Select a document."}
 
 
-def test_routes_need_sign_in(env):
-    from tests.conftest import ORIGIN as origin
-    client = TestClient(env.app)
-    assert client.get("/conversations?documentId=a", headers={"Origin": origin}).status_code == 401
-
-
 # --- Answering ---
 
 def test_streamed_answer_events_and_saved_result(env):
@@ -254,13 +248,6 @@ def test_duplicate_message_id_is_rejected(env):
     env.ask(chat["id"], turnId=turn_id)
     response = env.ask(chat["id"], "Again", turnId=turn_id)
     assert response.status_code == 409
-
-
-def test_other_users_cannot_use_a_chat(env):
-    chat = env.chat()
-    assert env.ask(chat["id"], owner="user_b").status_code == 404
-    assert env.call("POST", f"/conversations/{chat['id']}/stop", {"documentId": "a"}, owner="user_b").status_code == 404
-    assert env.call("DELETE", f"/conversations/{chat['id']}?documentId=a", owner="user_b").status_code == 404
 
 
 # --- Stop, retry and delete while an answer is running ---

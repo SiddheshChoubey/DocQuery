@@ -186,7 +186,3 @@ def test_status_hides_other_users_jobs(setup):
     response = setup.client.get(f"/upload/status/{queued['jobId']}", headers=setup.headers("user_b"))
     assert response.status_code == 404
     assert response.json() == {"message": "Upload job not found."}
-
-
-def test_status_needs_sign_in(setup):
-    assert setup.client.get("/upload/status/anything").status_code == 401

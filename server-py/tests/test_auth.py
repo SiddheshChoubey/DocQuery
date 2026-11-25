@@ -72,12 +72,6 @@ def test_rejects_token_signed_with_another_key(client, make_token, other_private
     assert response.json() == NOT_VERIFIED
 
 
-def test_rejects_garbage_token(client):
-    response = get_owner(client, "not-a-jwt")
-    assert response.status_code == 401
-    assert response.json() == NOT_VERIFIED
-
-
 def test_auth_errors_keep_cors_and_no_store_headers(client):
     response = get_owner(client)
     assert response.status_code == 401

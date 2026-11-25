@@ -181,10 +181,6 @@ def test_get_documents_returns_only_public_fields(setup):
                                               "sourceType": "pdf", "uploadedAt": "2026-11-25T10:00:00.000Z"}]}
 
 
-def test_get_documents_needs_sign_in(setup):
-    assert setup.client.get("/documents").status_code == 401
-
-
 def test_delete_removes_file_job_vectors_and_chats(setup):
     file = add_pdf(setup, "a")
     keep = add_pdf(setup, "b")

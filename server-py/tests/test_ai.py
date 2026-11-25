@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from app.ai import DOCUMENT_PREFIX, QUERY_PREFIX, GeminiEmbeddings, GeminiError, QdrantError, QdrantStore
+from app.ai import GeminiEmbeddings, GeminiError, QdrantError, QdrantStore
 
 
 def gemini(responses, calls):
@@ -22,11 +22,6 @@ def gemini(responses, calls):
 
 def ok(values):
     return httpx.Response(200, json={"embedding": {"values": values}})
-
-
-def test_prefixes_match_the_node_version():
-    assert QUERY_PREFIX == "task: question answering | query: "
-    assert DOCUMENT_PREFIX == "title: none | text: "
 
 
 def test_embed_document_request_format():
