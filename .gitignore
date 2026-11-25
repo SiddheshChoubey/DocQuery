@@ -143,3 +143,6 @@ dist
 
 # Keep Markdown documentation local.
 *.[mM][dD]
+
+# Local architecture diagrams (kept out of the repository at the user's request).
+/diagrams/
