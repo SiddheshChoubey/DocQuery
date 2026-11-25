@@ -8,6 +8,7 @@ import json
 import os
 import random
 import shutil
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -19,7 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.datastructures import UploadFile
 
 from app import settings
+from app.ai import QdrantStore
 from app.auth import ClerkAuth
+from app.conversations import ConversationStore
+from app.documents import delete_document, list_documents
 from app.errors import (INVALID_JSON_MESSAGE, ApiError, NoStoreMiddleware, SafeErrorsMiddleware,
                         register_error_handlers)
 from app.jobs import UploadJobs, failure_message, now_iso
@@ -79,14 +83,22 @@ def default_enqueue(job_id: str, text: Optional[str] = None) -> None:
 
 
 def create_app(auth: Optional[ClerkAuth] = None, jobs: Optional[UploadJobs] = None,
-               enqueue: Optional[Callable] = None, uploads_dir: Optional[Path] = None) -> FastAPI:
+               enqueue: Optional[Callable] = None, storage_root: Optional[Path] = None,
+               store: Optional[QdrantStore] = None,
+               conversations: Optional[ConversationStore] = None) -> FastAPI:
     origins = client_origins()
     app = FastAPI(title="DocQuery API", docs_url=None, redoc_url=None, openapi_url=None)
     # Every route except the health check depends on this; it returns the owner id.
     app.state.auth = auth = auth or ClerkAuth.from_env(origins)
     jobs = jobs or UploadJobs(settings.DATABASE_PATH)
     enqueue = enqueue or default_enqueue
-    uploads = Path(uploads_dir or settings.UPLOADS_DIR)
+    storage_root = Path(storage_root or settings.STORAGE_ROOT)
+    uploads = storage_root / "uploads"
+    store = store or QdrantStore()
+    conversations = conversations or ConversationStore(settings.DATABASE_PATH)
+    # Documents being deleted right now. Phase 6 also blocks new chats for them.
+    app.state.deleting_documents = deleting = set()
+    deleting_lock = threading.Lock()
 
     # Middleware added last runs first: CORS wraps everything, so even error
     # responses carry CORS headers.
@@ -110,6 +122,30 @@ def create_app(auth: Optional[ClerkAuth] = None, jobs: Optional[UploadJobs] = No
     @app.get("/")
     def health():
         return {"status": "All Good!"}
+
+    @app.get("/documents")
+    def get_documents(owner_id: str = Depends(auth)):
+        fields = ("id", "filename", "chunkCount", "sourceType", "uploadedAt")
+        return {"documents": [{field: document[field] for field in fields}
+                              for document in list_documents(store, owner_id)]}
+
+    @app.delete("/documents/{document_id}")
+    def remove_document(document_id: str, owner_id: str = Depends(auth)):
+        document = next((doc for doc in list_documents(store, owner_id) if doc["id"] == document_id), None)
+        if document is None:
+            raise ApiError(404, "Document not found. Refresh the document list.")
+        with deleting_lock:
+            if document["id"] in deleting:
+                raise ApiError(409, "This document is being deleted.")
+            deleting.add(document["id"])
+        try:
+            # The shared-file check needs every owner's documents, as in the Node server.
+            delete_document(document, list_documents(store), jobs=jobs, store=store, storage_root=storage_root)
+            conversations.remove_document(document["id"], owner_id)
+        finally:
+            with deleting_lock:
+                deleting.discard(document["id"])
+        return {"message": "Document deleted.", "documentId": document["id"]}
 
     @app.post("/upload/pdf", status_code=202)
     async def upload_pdf(request: Request, owner_id: str = Depends(auth)):

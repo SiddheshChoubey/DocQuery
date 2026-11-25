@@ -7,7 +7,7 @@ REST APIs with httpx keeps the exact request formats with no extra libraries.
 """
 
 import time
-from typing import Callable, Optional
+from typing import Callable, Iterator, Optional
 from urllib.parse import quote
 
 import httpx
@@ -108,3 +108,29 @@ class QdrantStore:
                                        json={"points": points[start:start + batch_size]})
             if not response.is_success:
                 raise QdrantError("Unable to save document vectors to Qdrant.")
+
+    def scroll(self, payload_fields: list[str], filter: Optional[dict] = None) -> Iterator[dict]:
+        """Yield every point's selected payload fields (never vectors), page by page."""
+        offset = None
+        while True:
+            body = {"limit": 256, "with_vector": False, "with_payload": payload_fields}
+            if offset is not None:
+                body["offset"] = offset
+            if filter:
+                body["filter"] = filter
+            response = self.client.post(self._collection_url("/points/scroll"), json=body, timeout=10)
+            if response.status_code == 404:
+                return  # Nothing has been indexed yet.
+            if not response.is_success:
+                raise QdrantError("Unable to list indexed PDFs from Qdrant.")
+            result = response.json()["result"]
+            yield from result["points"]
+            offset = result.get("next_page_offset")
+            if offset is None:
+                return
+
+    def delete(self, filter: dict) -> None:
+        response = self.client.post(self._collection_url("/points/delete?wait=true"), json={"filter": filter},
+                                    timeout=10)
+        if not response.is_success:
+            raise QdrantError("Unable to remove document vectors.")

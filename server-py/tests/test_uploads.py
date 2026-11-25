@@ -23,7 +23,7 @@ def setup(tmp_path, auth, make_token):
     jobs = UploadJobs(tmp_path / "data" / "conversations.sqlite")
     queue = FakeQueue()
     uploads = tmp_path / "uploads"
-    app = create_app(auth=auth, jobs=jobs, enqueue=queue, uploads_dir=uploads)
+    app = create_app(auth=auth, jobs=jobs, enqueue=queue, storage_root=tmp_path)
     client = TestClient(app, raise_server_exceptions=False)
 
     def headers(owner="user_a", **extra):
