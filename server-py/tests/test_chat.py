@@ -233,3 +233,64 @@ def test_quota_is_detected_through_wrapped_errors():
     assert error_status(Exception("429 RESOURCE_EXHAUSTED: quota exceeded")) == 429
     assert error_status(Exception("Model returned 4290 tokens")) is None
     assert error_status(Exception("plain failure")) is None
+
+
+# --- Query rewrite (query-rewrite.test.js) ---
+
+from app.chat import REWRITE_PROMPT, rewrite_query  # noqa: E402
+from app.conversations import contextual_query  # noqa: E402
+
+history = [{"role": "user", "content": "x" * 3000}, {"role": "assistant", "content": "Indexed in Qdrant."}]
+
+
+class RewriteModel:
+    def __init__(self, content=None, error=None, hang=False):
+        self.content, self.error, self.hang, self.calls = content, error, hang, []
+
+    async def ainvoke(self, messages):
+        self.calls.append(messages)
+        if self.hang:
+            await asyncio.sleep(60)
+        if self.error:
+            raise self.error
+        return Chunk(self.content)
+
+
+def test_first_question_skips_the_model():
+    model = RewriteModel("unused")
+    assert asyncio.run(rewrite_query(model, "Original question", [])) == "Original question"
+    assert model.calls == []
+
+
+def test_follow_up_sends_bounded_history_and_returns_search_text():
+    model = RewriteModel([{"type": "text", "text": " Where are indexed PDF chunks stored? "}])
+    result = asyncio.run(rewrite_query(model, "Where is it stored?", history * 3))
+    assert result == "Where are indexed PDF chunks stored?"
+    system, human = model.calls[0]
+    assert system == ("system", REWRITE_PROMPT) and "filenames, and identifiers" in REWRITE_PROMPT
+    data = json.loads(human[1])
+    assert data["question"] == "Where is it stored?" and len(data["history"]) == 4
+    assert all(len(message["content"]) <= 2000 for message in data["history"])
+    assert list(data) == ["history", "question"]
+
+
+@pytest.mark.parametrize("content", ["", "x" * 4001, "one\ntwo", None, "```query```"])
+def test_unusable_rewrites_fall_back(content):
+    assert asyncio.run(rewrite_query(RewriteModel(content), "Where?", history)) == contextual_query("Where?", history)
+
+
+def test_model_errors_and_timeouts_fall_back():
+    fallback = contextual_query("Where?", history)
+    assert asyncio.run(rewrite_query(RewriteModel(error=RuntimeError("private provider error")), "Where?", history)) == fallback
+    assert asyncio.run(rewrite_query(RewriteModel(hang=True), "Where?", history, timeout=0.05)) == fallback
+
+
+def test_stop_during_rewrite_is_not_a_fallback():
+    async def run():
+        task = asyncio.create_task(rewrite_query(RewriteModel(hang=True), "Where?", history))
+        await asyncio.sleep(0.02)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(run())

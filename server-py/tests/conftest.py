@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 os.environ.setdefault("CLERK_SECRET_KEY", "sk_test_placeholder")
 os.environ.setdefault("CLERK_ISSUER", "https://example.clerk.accounts.dev")
 os.environ.setdefault("CLIENT_ORIGINS", "http://localhost:3000")
+os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
 
 ISSUER = "https://test-instance.clerk.accounts.dev"
 ORIGIN = "http://localhost:3000"

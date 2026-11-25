@@ -236,7 +236,7 @@ def test_shared_file_blocks_deletion(setup):
 
 def test_document_being_deleted_cannot_be_deleted_twice(setup):
     add_pdf(setup, "a")
-    setup.app.state.deleting_documents.add("a")
+    setup.app.state.chat.deleting_documents.add("a")
     response = setup.client.delete("/documents/a", headers=setup.headers())
     assert response.status_code == 409
     assert response.json() == {"message": "This document is being deleted."}
@@ -254,7 +254,7 @@ def test_qdrant_failure_keeps_document_listed_for_retry(setup):
     response = setup.client.delete("/documents/a", headers=setup.headers())
     assert response.status_code == 500
     assert response.json() == {"message": "Request failed. Check the API key, model access, Qdrant, and Valkey."}
-    assert "a" not in setup.app.state.deleting_documents  # A retry is allowed.
+    assert "a" not in setup.app.state.chat.deleting_documents  # A retry is allowed.
     setup.qdrant.fail_delete = False
     assert [doc["id"] for doc in setup.client.get("/documents", headers=setup.headers()).json()["documents"]] == ["a"]
     assert setup.client.delete("/documents/a", headers=setup.headers()).status_code == 200

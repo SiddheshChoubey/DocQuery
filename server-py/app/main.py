@@ -4,11 +4,11 @@ Run from the server-py folder:
     uvicorn app.main:app --port 8000 --reload
 """
 
+import asyncio
 import json
 import os
 import random
 import shutil
-import threading
 import time
 import uuid
 from pathlib import Path
@@ -17,11 +17,14 @@ from typing import Callable, Optional
 from fastapi import Depends, FastAPI, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from starlette.datastructures import UploadFile
 
 from app import settings
-from app.ai import QdrantStore
+from app.ai import GeminiEmbeddings, QdrantStore
 from app.auth import ClerkAuth
+from app.chat import answer_with_sources, create_chat_model, retrieve_passages, rewrite_query
+from app.chat_service import ChatService
 from app.conversations import ConversationStore
 from app.documents import delete_document, list_documents
 from app.errors import (INVALID_JSON_MESSAGE, ApiError, NoStoreMiddleware, SafeErrorsMiddleware,
@@ -76,6 +79,43 @@ def stored_filename(original: str) -> str:
     return f"{int(time.time() * 1000)}-{round(random.random() * 1e9)}-{name}"
 
 
+def valid_document_id(value) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > 200:
+        raise ApiError(400, "Select a document.")
+    return value
+
+
+def ndjson(event: dict) -> bytes:
+    return (json.dumps(event, ensure_ascii=False) + "\n").encode()
+
+
+async def stream_events(queue: asyncio.Queue, task: asyncio.Task, load_conversation: Callable):
+    """Send each event as one JSON line, then a final "done" line with the saved chat.
+
+    If the client disconnects, this generator is closed and the answer is
+    cancelled, which saves it as stopped (like pressing Stop).
+    """
+    getter = None
+    try:
+        while True:
+            getter = asyncio.ensure_future(queue.get())
+            await asyncio.wait({getter, task}, return_when=asyncio.FIRST_COMPLETED)
+            if getter.done():
+                yield ndjson(getter.result())
+                continue
+            getter.cancel()
+            while not queue.empty():
+                yield ndjson(queue.get_nowait())
+            conversation = task.result() if not task.cancelled() else load_conversation()
+            yield ndjson({"type": "done", "conversation": conversation})
+            return
+    finally:
+        if getter is not None and not getter.done():
+            getter.cancel()
+        if not task.done():
+            task.cancel()
+
+
 def default_enqueue(job_id: str, text: Optional[str] = None) -> None:
     from app.tasks import enqueue_indexing  # Imported here so tests never need Celery or Valkey.
 
@@ -85,7 +125,8 @@ def default_enqueue(job_id: str, text: Optional[str] = None) -> None:
 def create_app(auth: Optional[ClerkAuth] = None, jobs: Optional[UploadJobs] = None,
                enqueue: Optional[Callable] = None, storage_root: Optional[Path] = None,
                store: Optional[QdrantStore] = None,
-               conversations: Optional[ConversationStore] = None) -> FastAPI:
+               conversations: Optional[ConversationStore] = None,
+               chat_model=None, rewrite_model=None, embeddings=None) -> FastAPI:
     origins = client_origins()
     app = FastAPI(title="DocQuery API", docs_url=None, redoc_url=None, openapi_url=None)
     # Every route except the health check depends on this; it returns the owner id.
@@ -96,9 +137,33 @@ def create_app(auth: Optional[ClerkAuth] = None, jobs: Optional[UploadJobs] = No
     uploads = storage_root / "uploads"
     store = store or QdrantStore()
     conversations = conversations or ConversationStore(settings.DATABASE_PATH)
-    # Documents being deleted right now. Phase 6 also blocks new chats for them.
-    app.state.deleting_documents = deleting = set()
-    deleting_lock = threading.Lock()
+    if chat_model is None:
+        settings.gemini_api_key()  # Like the Node API, refuse to start without a Gemini key.
+
+    # Gemini clients are created on first use, so importing the app stays fast and offline.
+    clients = {"chat": chat_model, "rewrite": rewrite_model, "embeddings": embeddings}
+
+    def client(name: str):
+        if clients[name] is None:
+            clients[name] = {"chat": lambda: create_chat_model(max_retries=2),
+                             "rewrite": lambda: create_chat_model(max_retries=0),
+                             "embeddings": GeminiEmbeddings}[name]()
+        return clients[name]
+
+    def find_document(owner_id: str, document_id: str):
+        return next((doc for doc in list_documents(store, owner_id) if doc["id"] == document_id), None)
+
+    async def answer(question, passages, document, **options):
+        return await answer_with_sources(client("chat"), question, passages, document, **options)
+
+    async def rewrite(question, history):
+        return await rewrite_query(client("rewrite"), question, history)
+
+    app.state.chat = chat = ChatService(
+        conversations, find_document=find_document,
+        retrieve=lambda document, query, limit: retrieve_passages(document, query, limit,
+                                                                  embeddings=client("embeddings"), store=store),
+        answer=answer, rewrite=rewrite)
 
     # Middleware added last runs first: CORS wraps everything, so even error
     # responses carry CORS headers.
@@ -134,17 +199,13 @@ def create_app(auth: Optional[ClerkAuth] = None, jobs: Optional[UploadJobs] = No
         document = next((doc for doc in list_documents(store, owner_id) if doc["id"] == document_id), None)
         if document is None:
             raise ApiError(404, "Document not found. Refresh the document list.")
-        with deleting_lock:
-            if document["id"] in deleting:
-                raise ApiError(409, "This document is being deleted.")
-            deleting.add(document["id"])
+        chat.begin_document_deletion(document["id"])
         try:
             # The shared-file check needs every owner's documents, as in the Node server.
             delete_document(document, list_documents(store), jobs=jobs, store=store, storage_root=storage_root)
             conversations.remove_document(document["id"], owner_id)
         finally:
-            with deleting_lock:
-                deleting.discard(document["id"])
+            chat.end_document_deletion(document["id"])
         return {"message": "Document deleted.", "documentId": document["id"]}
 
     @app.post("/upload/pdf", status_code=202)
@@ -195,6 +256,60 @@ def create_app(auth: Optional[ClerkAuth] = None, jobs: Optional[UploadJobs] = No
         if job["state"] == "failed":
             result["message"] = failure_message(job["error"] or "")
         return result
+
+    # --- Conversations ---
+
+    @app.get("/conversations")
+    def list_conversations(documentId: Optional[str] = None, owner_id: str = Depends(auth)):
+        return {"conversations": conversations.list(valid_document_id(documentId), owner_id)}
+
+    @app.post("/conversations", status_code=201)
+    async def create_conversation(request: Request, owner_id: str = Depends(auth)):
+        document_id = valid_document_id((await read_json_body(request)).get("documentId"))
+        if await run_in_threadpool(find_document, owner_id, document_id) is None:
+            raise ApiError(404, "This document is not indexed.")
+        chat.check_document(document_id)
+        return {"conversation": conversations.create(document_id, owner_id)}
+
+    @app.get("/conversations/{conversation_id}")
+    def get_conversation(conversation_id: str, documentId: Optional[str] = None, owner_id: str = Depends(auth)):
+        return {"conversation": conversations.get(conversation_id, valid_document_id(documentId), owner_id)}
+
+    @app.delete("/conversations/{conversation_id}")
+    def delete_conversation(conversation_id: str, documentId: Optional[str] = None,
+                            owner_id: str = Depends(auth)):
+        document_id = valid_document_id(documentId)
+        conversations.get(conversation_id, document_id, owner_id)
+        if conversation_id in chat.active:
+            raise ApiError(409, "Stop the answer before deleting this chat.")
+        conversations.remove(conversation_id, document_id, owner_id)
+        return {"message": "Conversation deleted."}
+
+    @app.post("/conversations/{conversation_id}/stop")
+    async def stop_answer(conversation_id: str, request: Request, owner_id: str = Depends(auth)):
+        chat.stop(conversation_id, valid_document_id((await read_json_body(request)).get("documentId")), owner_id)
+        return {"message": "Stop requested."}
+
+    @app.post("/conversations/{conversation_id}/messages")
+    async def send_message(conversation_id: str, request: Request, owner_id: str = Depends(auth)):
+        body = await read_json_body(request)
+        document_id = valid_document_id(body.get("documentId"))
+        if "retry" in body and not isinstance(body["retry"], bool):
+            raise ApiError(400, "Invalid retry flag.")
+
+        def saved_conversation():
+            return conversations.get(conversation_id, document_id, owner_id)
+
+        if request.headers.get("accept") != "application/x-ndjson":
+            task = chat.start(conversation_id, document_id, body, owner_id)
+            await asyncio.wait({task})
+            return {"conversation": task.result() if not task.cancelled() else saved_conversation()}
+        events: asyncio.Queue = asyncio.Queue()
+        # Validation errors are raised here, before the stream starts, as normal JSON errors.
+        task = chat.start(conversation_id, document_id, body, owner_id, on_event=events.put)
+        return StreamingResponse(stream_events(events, task, saved_conversation),
+                                 media_type="application/x-ndjson; charset=utf-8",
+                                 headers={"X-Accel-Buffering": "no"})
 
     return app
 

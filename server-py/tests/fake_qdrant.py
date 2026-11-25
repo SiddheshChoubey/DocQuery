@@ -45,6 +45,10 @@ class FakeQdrant:
             return httpx.Response(200, json={"result": {"points": [
                 {"id": point["id"], "payload": {"metadata": point["payload"]["metadata"]}} for point in page],
                 "next_page_offset": next_offset}})
+        if request.url.path.endswith("/points/query"):
+            matching = [point for point in self.points if _matches(point["payload"], body.get("filter"))]
+            return httpx.Response(200, json={"result": {"points": [
+                {"id": point["id"], "score": 1.0, "payload": point["payload"]} for point in matching[:body["limit"]]]}})
         if request.url.path.endswith("/points/delete"):
             if self.fail_delete:
                 return httpx.Response(500)
