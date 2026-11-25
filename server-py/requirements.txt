@@ -13,5 +13,8 @@ pypdf>=5,<7
 langchain-core>=0.3,<2
 langchain-text-splitters>=0.3,<2
 
+# Answers
+langchain-google-genai>=2.1,<5
+
 # Tests
 pytest>=8,<9

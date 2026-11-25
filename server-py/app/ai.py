@@ -134,3 +134,15 @@ class QdrantStore:
                                     timeout=10)
         if not response.is_success:
             raise QdrantError("Unable to remove document vectors.")
+
+    def search(self, vector: list[float], limit: int, filter: dict) -> list[dict]:
+        """Closest chunks to `vector` that match `filter`, as {"page_content", "metadata"}."""
+        response = self.client.post(self._collection_url("/points/query"), json={
+            "query": vector, "limit": limit, "filter": filter, "with_payload": True, "with_vector": False})
+        if response.status_code == 404:
+            return []  # Nothing has been indexed yet.
+        if not response.is_success:
+            raise QdrantError("Unable to search the selected document in Qdrant.")
+        return [{"page_content": (point.get("payload") or {}).get("content", ""),
+                 "metadata": (point.get("payload") or {}).get("metadata") or {}}
+                for point in response.json()["result"]["points"]]

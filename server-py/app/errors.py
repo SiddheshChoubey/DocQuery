@@ -6,6 +6,7 @@ sent to the client or logged.
 """
 
 import logging
+import re
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -30,11 +31,21 @@ class ApiError(Exception):
 
 
 def error_status(error: Exception):
-    """Return the HTTP status a provider error carries, if any."""
-    for name in ("status", "status_code", "code"):
-        value = getattr(error, name, None)
-        if isinstance(value, int):
-            return value
+    """The HTTP status a provider error carries, if any.
+
+    Libraries often wrap the original error, so the whole cause chain is checked,
+    and Gemini's RESOURCE_EXHAUSTED code counts as 429.
+    """
+    seen = set()
+    while error is not None and id(error) not in seen:
+        seen.add(id(error))
+        for name in ("status", "status_code", "code"):
+            value = getattr(error, name, None)
+            if isinstance(value, int) and not isinstance(value, bool):
+                return value
+        if re.search(r"\b429\b|RESOURCE_EXHAUSTED", str(error)):
+            return 429
+        error = error.__cause__ or error.__context__
     return None
 
 
