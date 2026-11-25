@@ -10,6 +10,7 @@ import logging
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger("docquery")
@@ -41,6 +42,59 @@ def message_response(status: int, message: str) -> JSONResponse:
     return JSONResponse({"message": message}, status_code=status)
 
 
+def unexpected_error_response(error: Exception) -> JSONResponse:
+    status = 429 if error_status(error) == 429 else 500
+    logger.error("Request failed (status %s). Check Gemini access/quota and local services.", status)
+    return message_response(status, QUOTA_MESSAGE if status == 429 else GENERIC_MESSAGE)
+
+
+class SafeErrorsMiddleware:
+    """Turns unexpected exceptions into the JSON error format.
+
+    Runs inside the CORS middleware so error responses still carry CORS headers
+    and the frontend can read their message.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+        started = False
+
+        async def track_start(message):
+            nonlocal started
+            if message["type"] == "http.response.start":
+                started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, track_start)
+        except Exception as error:
+            if started:  # Part of the response was already sent; nothing safe to add.
+                raise
+            await unexpected_error_response(error)(scope, receive, send)
+
+
+class NoStoreMiddleware:
+    """Adds Cache-Control: no-store to every response except the health check."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope["path"] == "/":
+            return await self.app(scope, receive, send)
+
+        async def add_header(message):
+            if message["type"] == "http.response.start":
+                MutableHeaders(scope=message)["Cache-Control"] = "no-store"
+            await send(message)
+
+        await self.app(scope, receive, add_header)
+
+
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(ApiError)
     async def api_error(_request: Request, error: ApiError):
@@ -56,9 +110,3 @@ def register_error_handlers(app: FastAPI) -> None:
         # Routes validate their own inputs to return the contract's messages.
         # Anything FastAPI rejects first is a malformed request body.
         return message_response(400, INVALID_JSON_MESSAGE)
-
-    @app.exception_handler(Exception)
-    async def unexpected_error(_request: Request, error: Exception):
-        status = 429 if error_status(error) == 429 else 500
-        logger.error("Request failed (status %s). Check Gemini access/quota and local services.", status)
-        return message_response(status, QUOTA_MESSAGE if status == 429 else GENERIC_MESSAGE)
