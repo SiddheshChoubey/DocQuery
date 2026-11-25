@@ -16,5 +16,8 @@ langchain-text-splitters>=0.3,<2
 # Answers
 langchain-google-genai>=2.1,<5
 
+# Development: runs API, worker and frontend together (see start.ps1)
+honcho>=2,<3
+
 # Tests
 pytest>=8,<9

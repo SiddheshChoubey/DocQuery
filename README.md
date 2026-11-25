@@ -102,6 +102,22 @@ Never commit real keys. Restart the API and worker after changing `server/.env`.
 
 ## 4. Start the app
 
+### Quick start — one command
+
+Start Docker Desktop, then from the `DocQuery` folder run:
+
+```powershell
+.\start.ps1
+```
+
+It starts Valkey and Qdrant, then runs the API, the worker and the frontend in one
+terminal, with each log line labelled `api`, `worker` or `web`. Open
+[http://localhost:3000](http://localhost:3000) once `web` reports it is ready.
+Press `Ctrl+C` to stop all three. The processes are defined in `Procfile` and run
+by [honcho](https://honcho.readthedocs.io/).
+
+### Or run each part in its own terminal
+
 Start Docker Desktop first, then open **three terminals** in the `DocQuery` folder.
 
 ### Terminal 1 — Docker services and API
@@ -200,6 +216,8 @@ DocQuery/
 │   ├── requirements.txt
 │   └── .env.example
 ├── docker-compose.yml           Qdrant and Valkey
+├── Procfile                     API, worker and frontend processes for start.ps1
+├── start.ps1                    Starts everything with one command
 └── README.md
 ```
 
