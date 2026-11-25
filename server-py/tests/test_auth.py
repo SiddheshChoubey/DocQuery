@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi import Depends
 from fastapi.testclient import TestClient
@@ -113,24 +115,53 @@ def test_jwt_key_from_env_accepts_escaped_newlines(monkeypatch, signing_keys, ma
     assert get_owner(TestClient(app), make_token("user_b")).json() == {"ownerId": "user_b"}
 
 
-def test_secret_key_mode_fetches_clerk_signing_keys(monkeypatch, signing_keys, make_token):
-    calls = {}
+def test_secret_key_mode_fetches_and_caches_clerk_signing_keys(signing_keys, make_token):
+    import httpx
+    from jwt.algorithms import RSAAlgorithm
+    from cryptography.hazmat.primitives import serialization
 
-    class FakeJWKClient:
-        def __init__(self, url, cache_keys, headers):
-            calls.update(url=url, cache_keys=cache_keys, headers=headers)
+    public_key = serialization.load_pem_public_key(signing_keys[1].encode())
+    jwk = {**json.loads(RSAAlgorithm.to_jwk(public_key)), "kid": "ins_key_1", "use": "sig", "alg": "RS256"}
+    requests = []
 
-        def get_signing_key_from_jwt(self, _token):
-            return type("Key", (), {"key": signing_keys[1]})
+    def handler(request):
+        requests.append(request)
+        return httpx.Response(200, json={"keys": [jwk]})
 
-    monkeypatch.setattr("app.auth.PyJWKClient", FakeJWKClient)
-    auth = ClerkAuth(secret_key="sk_test_123", issuer=ISSUER, authorized_parties=[ORIGIN])
+    auth = ClerkAuth(secret_key="sk_test_123", issuer=ISSUER, authorized_parties=[ORIGIN],
+                     http=httpx.Client(transport=httpx.MockTransport(handler)))
+    client = client_for(auth)
+    for owner in ("user_c", "user_d"):
+        token = make_token(owner, headers={"kid": "ins_key_1"})
+        assert get_owner(client, token).json() == {"ownerId": owner}
+    assert len(requests) == 1  # Cached after the first fetch.
+    assert str(requests[0].url) == "https://api.clerk.com/v1/jwks"
+    assert requests[0].headers["authorization"] == "Bearer sk_test_123"
+    assert requests[0].headers["user-agent"] == "docquery-api"
+
+
+def test_unknown_key_or_failed_key_fetch_is_rejected(make_token):
+    import httpx
+
+    auth = ClerkAuth(secret_key="sk_test", issuer=ISSUER, authorized_parties=[ORIGIN],
+                     http=httpx.Client(transport=httpx.MockTransport(lambda _r: httpx.Response(403))))
+    response = get_owner(client_for(auth), make_token(headers={"kid": "ins_key_1"}))
+    assert response.status_code == 401
+    assert response.json() == NOT_VERIFIED
+
+
+def test_failure_reason_is_logged_without_the_token(client, make_token, caplog):
+    token = make_token(azp="http://localhost:3001")
+    get_owner(client, token)
+    assert "origin 'http://localhost:3001' is not in CLIENT_ORIGINS" in caplog.text
+    assert token not in caplog.text
+
+
+def client_for(auth):
     app = create_app(auth=auth)
 
     @app.get("/test/owner")
     def owner(owner_id: str = Depends(app.state.auth)):
         return {"ownerId": owner_id}
 
-    assert get_owner(TestClient(app), make_token("user_c")).json() == {"ownerId": "user_c"}
-    assert calls == {"url": "https://api.clerk.com/v1/jwks", "cache_keys": True,
-                     "headers": {"Authorization": "Bearer sk_test_123"}}
+    return TestClient(app)
