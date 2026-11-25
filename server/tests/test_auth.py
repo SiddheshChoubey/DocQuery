@@ -93,7 +93,7 @@ def test_health_needs_no_token(client):
 def test_missing_configuration_stops_startup(settings):
     with pytest.raises(RuntimeError, match="CLERK_SECRET_KEY"):
         ClerkAuth(**settings)
-    assert "server-py/.env" in CONFIG_MESSAGE
+    assert "server/.env" in CONFIG_MESSAGE
 
 
 def test_jwt_key_from_env_accepts_escaped_newlines(monkeypatch, signing_keys, make_token):

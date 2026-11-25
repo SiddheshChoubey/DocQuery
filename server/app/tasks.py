@@ -1,6 +1,6 @@
 """Celery app and the document indexing task.
 
-Start the worker from the server-py folder (on Windows, --pool=solo is required):
+Start the worker from the server folder (on Windows, --pool=solo is required):
     celery -A app.tasks worker --pool=solo --loglevel=info
 """
 

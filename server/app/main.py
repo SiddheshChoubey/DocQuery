@@ -1,6 +1,6 @@
 """DocQuery API (Python).
 
-Run from the server-py folder:
+Run from the server folder:
     uvicorn app.main:app --port 8000 --reload
 """
 

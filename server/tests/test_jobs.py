@@ -69,7 +69,7 @@ def test_creating_the_store_does_not_touch_the_disk(tmp_path):
     ("Your quota is exhausted", "Gemini quota was reached while indexing. Wait for your quota to reset, then upload again."),
     ("Gemini embedding request failed (403 PERMISSION_DENIED)",
      "Gemini rejected the request. Check your API key and model access."),
-    ("Set GEMINI_API_KEY in server-py/.env before starting.",
+    ("Set GEMINI_API_KEY in server/.env before starting.",
      "Gemini rejected the request. Check your API key and model access."),
     ("Gemini embedding request failed (404 NOT_FOUND)",
      "A required model or resource was unavailable. Check the worker and Gemini model access."),

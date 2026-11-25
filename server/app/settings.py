@@ -8,9 +8,8 @@ from dotenv import load_dotenv
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BACKEND_DIR / ".env")
 
-# Folder that holds uploads/ and data/. During the migration this points at the
-# Node server's folder (STORAGE_ROOT=../server) so both backends share one copy.
-STORAGE_ROOT = (BACKEND_DIR / os.getenv("STORAGE_ROOT", ".")).resolve()
+# uploads/ and data/ live inside the backend folder (both are git-ignored).
+STORAGE_ROOT = BACKEND_DIR
 DATABASE_PATH = STORAGE_ROOT / "data" / "conversations.sqlite"
 
 VALKEY_URL = os.getenv("VALKEY_URL", "redis://localhost:6379/0")
@@ -21,5 +20,5 @@ QDRANT_COLLECTION = "pdf-rag-gemini-embedding-2"
 def gemini_api_key() -> str:
     key = (os.getenv("GEMINI_API_KEY") or "").strip()
     if not key:
-        raise RuntimeError("Set GEMINI_API_KEY in server-py/.env before starting.")
+        raise RuntimeError("Set GEMINI_API_KEY in server/.env before starting.")
     return key

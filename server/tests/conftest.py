@@ -7,7 +7,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
 # Importing app.main builds the module-level app, which needs Clerk settings.
-# Real values from server-py/.env take precedence; tests never contact Clerk.
+# Real values from server/.env take precedence; tests never contact Clerk.
 os.environ.setdefault("CLERK_SECRET_KEY", "sk_test_placeholder")
 os.environ.setdefault("CLERK_ISSUER", "https://example.clerk.accounts.dev")
 os.environ.setdefault("CLIENT_ORIGINS", "http://localhost:3000")

@@ -20,7 +20,7 @@ from app.errors import ApiError
 logger = logging.getLogger("docquery.auth")
 
 CLERK_JWKS_URL = "https://api.clerk.com/v1/jwks"
-CONFIG_MESSAGE = "Configure CLERK_SECRET_KEY (or CLERK_JWT_KEY), CLERK_ISSUER, and CLIENT_ORIGINS in server-py/.env."
+CONFIG_MESSAGE = "Configure CLERK_SECRET_KEY (or CLERK_JWT_KEY), CLERK_ISSUER, and CLIENT_ORIGINS in server/.env."
 SIGN_IN_MESSAGE = "Sign in to continue."
 VERIFY_MESSAGE = "Your session could not be verified. Sign in again."
 
